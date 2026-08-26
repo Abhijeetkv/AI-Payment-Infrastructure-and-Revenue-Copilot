@@ -1,14 +1,14 @@
 import { db } from "@/lib/db";
 import { verifyPaymentSignature, fetchRazorpayPayment } from "@/lib/razorpay/payments";
 import { inngest } from "@/inngest/client";
-import { ValidationError, NotFoundError } from "@/server/errors";
+import { LedgerService } from "@/lib/transactions/ledger";
+import { AuditService } from "@/server/services/audit.service";
+import { validateTransition } from "@/lib/payments/state-machine";
+import { ValidationError, NotFoundError, PaymentStateError } from "@/server/errors";
 import { logger } from "@/lib/logger";
 import {
   PaymentStatus,
   OrderStatus,
-  TransactionType,
-  TransactionDirection,
-  TransactionStatus,
   type Prisma,
 } from "@prisma/client";
 
@@ -31,7 +31,7 @@ export interface ListPaymentsQuery {
 
 export class PaymentService {
   /**
-   * Verify signature and record successful payment
+   * Verify signature, validate state machine and atomically record payment and ledger entry
    */
   static async verifyAndRecordPayment(
     merchantId: string,
@@ -70,10 +70,10 @@ export class PaymentService {
         resolvedMethod = rzpPayment.method;
       }
     } catch {
-      // Use fallback provided method if fetch fails in test mode
+      // Fallback in test mode
     }
 
-    // 3. Atomically update DB records
+    // 3. Atomically validate state transition and update DB records
     const result = await db.$transaction(async (tx) => {
       // Find and verify order belongs to merchant
       const order = await tx.order.findFirst({
@@ -87,13 +87,18 @@ export class PaymentService {
         throw new NotFoundError(`Order ${orderId} not found for this merchant`);
       }
 
-      // Check if payment already recorded
+      // Check if payment already recorded (idempotency check)
       const existingPayment = await tx.payment.findUnique({
         where: { razorpayPaymentId },
       });
 
       if (existingPayment) {
         return { payment: existingPayment, order, alreadyProcessed: true };
+      }
+
+      // State machine validation from CREATED to SUCCESS
+      if (!validateTransition(PaymentStatus.CREATED, PaymentStatus.SUCCESS)) {
+        throw new PaymentStateError("Illegal state transition from CREATED to SUCCESS");
       }
 
       // Create Payment record
@@ -118,21 +123,19 @@ export class PaymentService {
         },
       });
 
-      // Create Financial Ledger Entry (Transaction)
-      await tx.transaction.create({
-        data: {
+      // Record Financial Ledger Entry (CREDIT) via LedgerService
+      await LedgerService.recordPaymentTransaction(
+        {
           merchantId,
           paymentId: payment.id,
           orderId: order.id,
-          type: TransactionType.PAYMENT,
-          direction: TransactionDirection.CREDIT,
           amount,
-          currency,
-          status: TransactionStatus.COMPLETED,
           referenceId: razorpayPaymentId,
-          description: `Payment for order ${order.receipt || order.id}`,
+          currency,
+          description: `Payment capture for order ${order.receipt || order.id}`,
         },
-      });
+        tx
+      );
 
       // Record Payment State Event
       await tx.paymentEvent.create({
@@ -150,26 +153,28 @@ export class PaymentService {
         },
       });
 
-      // Record Audit Log
-      await tx.auditLog.create({
-        data: {
+      // Record Audit Log via AuditService
+      await AuditService.createAuditLog(
+        {
           merchantId,
           entityType: "payment",
           entityId: payment.id,
           action: "verified_and_captured",
           changes: {
-            status: PaymentStatus.SUCCESS,
+            fromStatus: "CREATED",
+            toStatus: PaymentStatus.SUCCESS,
             amount,
             method: resolvedMethod,
           },
           performedBy: "system",
         },
-      });
+        tx
+      );
 
       return { payment, order: updatedOrder, alreadyProcessed: false };
     });
 
-    // 4. Dispatch Inngest Event for async tasks (analytics, notifications)
+    // 4. Dispatch Inngest Event for async processing
     try {
       await inngest.send({
         name: "payment/created",
@@ -182,7 +187,7 @@ export class PaymentService {
       logger.warn("Failed to dispatch Inngest event", { paymentId: result.payment.id }, err);
     }
 
-    logger.info("Payment verified and recorded successfully", {
+    logger.info("Payment verified and recorded with atomic ledger", {
       paymentId: result.payment.id,
       orderId: result.order.id,
       amount,
@@ -192,7 +197,7 @@ export class PaymentService {
   }
 
   /**
-   * Fetch single payment by ID
+   * Fetch single payment with full audit history, events, transactions and refundable balance
    */
   static async getPayment(merchantId: string, paymentId: string) {
     const payment = await db.payment.findFirst({
@@ -202,8 +207,12 @@ export class PaymentService {
       },
       include: {
         order: true,
-        transactions: true,
-        refunds: true,
+        transactions: {
+          orderBy: { createdAt: "asc" },
+        },
+        refunds: {
+          orderBy: { createdAt: "desc" },
+        },
         paymentEvents: {
           orderBy: { createdAt: "desc" },
         },
@@ -214,7 +223,21 @@ export class PaymentService {
       throw new NotFoundError(`Payment with ID ${paymentId} not found`);
     }
 
-    return payment;
+    // Calculate live ledger refundable balance
+    const ledgerBalance = await LedgerService.getRefundableAmount(payment.id);
+
+    // Fetch entity audit logs
+    const auditLogs = await AuditService.getEntityAuditLogs(
+      merchantId,
+      "payment",
+      payment.id
+    );
+
+    return {
+      ...payment,
+      ledgerBalance,
+      auditLogs,
+    };
   }
 
   /**

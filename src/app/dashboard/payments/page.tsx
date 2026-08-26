@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   CreditCard,
   RefreshCw,
@@ -176,9 +177,12 @@ export default function PaymentsPage() {
                       className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/40 transition-colors"
                     >
                       <td className="py-3 px-4">
-                        <span className="font-mono text-xs font-semibold text-indigo-400">
+                        <Link
+                          href={`/dashboard/payments/${payment.id}`}
+                          className="font-mono text-xs font-semibold text-indigo-400 hover:underline hover:text-indigo-300 inline-block"
+                        >
                           {payment.razorpayPaymentId || payment.id.slice(0, 14)}
-                        </span>
+                        </Link>
                         <div className="text-[11px] text-zinc-500 font-mono">
                           {payment.id}
                         </div>
