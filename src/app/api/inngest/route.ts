@@ -4,6 +4,8 @@ import { processWebhook } from "@/inngest/webhook-processing";
 import { processPayment } from "@/inngest/payment-processing";
 import { resolvePendingPayment } from "@/inngest/payment-resolution";
 import { processRefund } from "@/inngest/refund-processing";
+import { computeDailyMetricsCron } from "@/inngest/daily-analytics";
+import { detectAnomaliesCron } from "@/inngest/anomaly-detection";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -12,5 +14,7 @@ export const { GET, POST, PUT } = serve({
     processPayment,
     resolvePendingPayment,
     processRefund,
+    computeDailyMetricsCron,
+    detectAnomaliesCron,
   ],
 });

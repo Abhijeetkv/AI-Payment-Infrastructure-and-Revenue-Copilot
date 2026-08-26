@@ -47,25 +47,14 @@ export function RefundDialog({
   currency = "INR",
   onRefundSuccess,
 }: RefundDialogProps) {
-  const [amountInput, setAmountInput] = React.useState<string>(
-    (maxRefundableAmount / 100).toFixed(2)
-  );
+  const initialAmount = (maxRefundableAmount / 100).toFixed(2);
+  const [amountInput, setAmountInput] = React.useState<string>(initialAmount);
   const [reason, setReason] = React.useState<string>(REASON_PRESETS[0]);
   const [customReason, setCustomReason] = React.useState<string>("");
   const [speed, setSpeed] = React.useState<"normal" | "optimum">("normal");
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<boolean>(false);
-
-  React.useEffect(() => {
-    if (isOpen) {
-      setAmountInput((maxRefundableAmount / 100).toFixed(2));
-      setReason(REASON_PRESETS[0]);
-      setCustomReason("");
-      setError(null);
-      setSuccess(false);
-    }
-  }, [isOpen, maxRefundableAmount]);
 
   if (!isOpen) return null;
 
