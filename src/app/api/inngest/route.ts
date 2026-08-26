@@ -1,10 +1,14 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
+import { processWebhook } from "@/inngest/webhook-processing";
+import { processPayment } from "@/inngest/payment-processing";
+import { resolvePendingPayment } from "@/inngest/payment-resolution";
 
-// All Inngest functions will be registered here as they are implemented
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
-    /* functions will be added in subsequent phases */
+    processWebhook,
+    processPayment,
+    resolvePendingPayment,
   ],
 });
