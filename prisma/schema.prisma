@@ -1,0 +1,472 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Better Auth Models ─────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  merchants     Merchant[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verifications")
+}
+
+// ─── Business Models ────────────────────────────────
+
+model Merchant {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  email       String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders             Order[]
+  payments           Payment[]
+  transactions       Transaction[]
+  refunds            Refund[]
+  webhookEvents      WebhookEvent[]
+  paymentEvents      PaymentEvent[]
+  auditLogs          AuditLog[]
+  anomalies          Anomaly[]
+  dailyMetrics       DailyMetric[]
+  aiConversations    AIConversation[]
+  idempotencyRecords IdempotencyRecord[]
+
+  @@unique([userId])
+  @@index([userId])
+  @@map("merchants")
+}
+
+// ─── Order Model ────────────────────────────────────
+
+enum OrderStatus {
+  CREATED
+  ATTEMPTED
+  PAID
+  FAILED
+  EXPIRED
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  merchantId      String
+  amount          Int         // Amount in smallest currency unit (paise)
+  currency        String      @default("INR")
+  status          OrderStatus @default(CREATED)
+  razorpayOrderId String?     @unique
+  receipt         String?
+  notes           Json?
+  isSeeded        Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  merchant Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([merchantId])
+  @@index([razorpayOrderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// ─── Payment Model ──────────────────────────────────
+
+enum PaymentStatus {
+  CREATED
+  PROCESSING
+  AUTHORIZED
+  CAPTURED
+  SUCCESS
+  FAILED
+  PENDING
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  merchantId        String
+  orderId           String
+  razorpayPaymentId String?       @unique
+  razorpayOrderId   String?
+  amount            Int           // Amount in smallest currency unit
+  currency          String        @default("INR")
+  paymentMethod     String?
+  status            PaymentStatus @default(CREATED)
+  failureReason     String?
+  isSeeded          Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+  refunds       Refund[]
+  paymentEvents PaymentEvent[]
+
+  @@index([merchantId])
+  @@index([orderId])
+  @@index([razorpayPaymentId])
+  @@index([razorpayOrderId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([paymentMethod])
+  @@map("payments")
+}
+
+// ─── Transaction Model (Immutable Ledger) ───────────
+
+enum TransactionType {
+  PAYMENT
+  REFUND
+  ADJUSTMENT
+}
+
+enum TransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+model Transaction {
+  id          String               @id @default(cuid())
+  merchantId  String
+  paymentId   String
+  orderId     String
+  type        TransactionType
+  direction   TransactionDirection
+  amount      Int                  // Always positive; direction determines sign
+  currency    String               @default("INR")
+  status      TransactionStatus    @default(COMPLETED)
+  referenceId String?              // Razorpay payment/refund ID
+  description String?
+  isSeeded    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment  Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([paymentId])
+  @@index([orderId])
+  @@index([type])
+  @@index([direction])
+  @@index([status])
+  @@index([createdAt])
+  @@index([referenceId])
+  @@map("transactions")
+}
+
+// ─── Payment Event Model ────────────────────────────
+
+model PaymentEvent {
+  id         String   @id @default(cuid())
+  merchantId String
+  paymentId  String
+  fromStatus String?
+  toStatus   String
+  trigger    String   // "webhook", "api", "inngest", "manual"
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment  Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([paymentId])
+  @@index([createdAt])
+  @@map("payment_events")
+}
+
+// ─── Webhook Event Model ────────────────────────────
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSING
+  DELIVERED
+  FAILED
+  RETRYING
+  DUPLICATE
+}
+
+model WebhookEvent {
+  id           String        @id @default(cuid())
+  merchantId   String?
+  eventId      String        @unique // Razorpay event ID for deduplication
+  eventType    String
+  payload      Json
+  status       WebhookStatus @default(RECEIVED)
+  attemptCount Int           @default(1)
+  lastError    String?
+  processedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([eventType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("webhook_events")
+}
+
+// ─── Refund Model ───────────────────────────────────
+
+enum RefundStatus {
+  CREATED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model Refund {
+  id               String       @id @default(cuid())
+  merchantId       String
+  paymentId        String
+  razorpayRefundId String?      @unique
+  amount           Int          // Refund amount in smallest currency unit
+  currency         String       @default("INR")
+  status           RefundStatus @default(CREATED)
+  reason           String?
+  failureReason    String?
+  isSeeded         Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment  Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([paymentId])
+  @@index([razorpayRefundId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("refunds")
+}
+
+// ─── Idempotency Record ─────────────────────────────
+
+model IdempotencyRecord {
+  id           String   @id @default(cuid())
+  merchantId   String
+  key          String   @unique
+  operation    String   // "create_order", "create_payment", "create_refund"
+  statusCode   Int
+  responseBody Json
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([key])
+  @@index([merchantId])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+// ─── Audit Log ──────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  merchantId  String
+  entityType  String   // "payment", "order", "refund", "transaction"
+  entityId    String
+  action      String   // "created", "status_changed", "refunded", etc.
+  changes     Json?    // { from: {...}, to: {...} }
+  performedBy String?  // userId or "system"
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Anomaly ────────────────────────────────────────
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Anomaly {
+  id            String          @id @default(cuid())
+  merchantId    String
+  type          String          // "failure_spike", "revenue_drop", "refund_spike", etc.
+  severity      AnomalySeverity
+  metric        String          // "failure_rate", "revenue", "refund_rate", etc.
+  currentValue  Float
+  baselineValue Float
+  deviation     Float           // Percentage deviation
+  description   String
+  isResolved    Boolean         @default(false)
+  resolvedAt    DateTime?
+  detectedAt    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([type])
+  @@index([severity])
+  @@index([detectedAt])
+  @@index([isResolved])
+  @@map("anomalies")
+}
+
+// ─── Daily Metrics ──────────────────────────────────
+
+model DailyMetric {
+  id                  String   @id @default(cuid())
+  merchantId          String
+  date                DateTime @db.Date
+
+  grossRevenue        Int      @default(0) // In smallest currency unit
+  refundAmount        Int      @default(0)
+  netRevenue          Int      @default(0)
+
+  successfulPayments  Int      @default(0)
+  failedPayments      Int      @default(0)
+  pendingPayments     Int      @default(0)
+
+  transactionCount    Int      @default(0)
+
+  successRate         Float    @default(0)
+  failureRate         Float    @default(0)
+  refundRate          Float    @default(0)
+
+  avgTransactionValue Float    @default(0)
+
+  // Breakdown by payment method (JSON)
+  methodBreakdown     Json?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, date])
+  @@index([merchantId])
+  @@index([date])
+  @@map("daily_metrics")
+}
+
+// ─── AI Conversation & Message ──────────────────────
+
+model AIConversation {
+  id         String   @id @default(cuid())
+  merchantId String
+  title      String   @default("New Conversation")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  merchant Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  messages AIMessage[]
+
+  @@index([merchantId])
+  @@index([createdAt])
+  @@map("ai_conversations")
+}
+
+enum AIMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+  SYSTEM
+}
+
+model AIMessage {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           AIMessageRole
+  content        String?
+  toolName       String?
+  toolInput      Json?
+  toolOutput     Json?
+  createdAt      DateTime      @default(now())
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("ai_messages")
+}
