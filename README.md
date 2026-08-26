@@ -220,11 +220,11 @@ npm run build
 - [x] **Phase 1 — Foundation**: Scaffolding, strict TS, Prisma 7 with 14 models, Better Auth, Redis & Inngest singletons, server layer, and dashboard shell.
 - [x] **Phase 2 — Razorpay Integration**: Order creation, Razorpay Checkout button SDK, HMAC payment signature verification, and orders/payments UI.
 - [x] **Phase 3 — Database + Ledger + State Machine**: State transition graph engine, double-entry financial ledger (CREDIT/DEBIT), audit logs, and payment detail timeline.
-- [ ] **Phase 4 — Reliability Engineering**: Multi-tiered idempotency (Redis + DB), webhook HMAC verification, deduplication, and Inngest background workers.
-- [ ] **Phase 5 — Refunds**: Full & partial refunds, refundable balance validation, DEBIT ledger entries, and refund processing jobs.
-- [ ] **Phase 6 — Analytics Engine**: Server-side PostgreSQL metrics aggregation, daily rollups cron, and Recharts interactive graphs.
-- [ ] **Phase 7 — Anomaly Detection**: Statistical moving average engine, z-score deviation scoring, and automated alerts.
-- [ ] **Phase 8 — AI Copilot**: Grounded financial assistant with database tool calling and streaming responses.
+- [x] **Phase 4 — Reliability Engineering**: Multi-tiered idempotency (Redis + DB), webhook HMAC verification, deduplication, and Inngest background workers.
+- [x] **Phase 5 — Refunds**: Full & partial refunds, refundable balance validation, DEBIT ledger entries, and refund processing jobs.
+- [x] **Phase 6 — Analytics Engine**: Server-side PostgreSQL metrics aggregation, daily rollups cron, and Recharts interactive graphs.
+- [x] **Phase 7 — Anomaly Detection**: Statistical moving average engine, z-score deviation scoring, and automated alerts.
+- [x] **Phase 8 — AI Copilot**: Grounded financial assistant with database tool calling and streaming responses.
 - [ ] **Phase 9 — Testing, Security & Failure Simulator**: Comprehensive Vitest suite, rate limiting, and fault injection test simulator.
 - [ ] **Phase 10 — Production Polish & Seed Data**: Realistic high-volume merchant seed generator and documentation finalization.
 
