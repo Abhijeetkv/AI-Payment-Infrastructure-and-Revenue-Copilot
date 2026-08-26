@@ -185,6 +185,75 @@ export const processWebhook = inngest.createFunction(
         return { status: "failed_recorded", paymentId };
       }
 
+      // C. Refund Processed / Created Event
+      if (eventType === "refund.processed" || eventType === "refund.created") {
+        const { refundId: rzpRefundId } = parsed;
+        if (rzpRefundId && paymentId) {
+          const payment = await db.payment.findUnique({
+            where: { razorpayPaymentId: paymentId },
+          });
+
+          if (payment) {
+            // Check if refund already recorded
+            let refund = await db.refund.findUnique({
+              where: { razorpayRefundId: rzpRefundId },
+            });
+
+            const refundAmount = amount || 0;
+
+            if (!refund && refundAmount > 0) {
+              refund = await db.refund.create({
+                data: {
+                  merchantId: payment.merchantId,
+                  paymentId: payment.id,
+                  razorpayRefundId: rzpRefundId,
+                  amount: refundAmount,
+                  currency: payment.currency,
+                  status: "PROCESSED",
+                  reason: "Razorpay webhook refund sync",
+                },
+              });
+
+              // Record DEBIT in ledger if not already recorded
+              await LedgerService.recordRefundTransaction({
+                merchantId: payment.merchantId,
+                paymentId: payment.id,
+                orderId: payment.orderId,
+                amount: refundAmount,
+                refundId: refund.id,
+                referenceId: rzpRefundId,
+                currency: payment.currency,
+                description: `Webhook sync refund ${rzpRefundId}`,
+              });
+
+              // Re-calculate ledger balance
+              const { refundableBalance } = await LedgerService.getRefundableAmount(payment.id);
+              const targetStatus =
+                refundableBalance === 0
+                  ? PaymentStatus.REFUNDED
+                  : PaymentStatus.PARTIALLY_REFUNDED;
+
+              await db.payment.update({
+                where: { id: payment.id },
+                data: { status: targetStatus },
+              });
+
+              await db.paymentEvent.create({
+                data: {
+                  merchantId: payment.merchantId,
+                  paymentId: payment.id,
+                  fromStatus: payment.status,
+                  toStatus: targetStatus,
+                  trigger: "webhook",
+                  metadata: { eventId: parsed.eventId, eventType, rzpRefundId },
+                },
+              });
+            }
+          }
+        }
+        return { status: "refund_processed", rzpRefundId: parsed.refundId, paymentId };
+      }
+
       return { status: "unhandled_event", eventType };
     });
 

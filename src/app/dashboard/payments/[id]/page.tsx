@@ -16,11 +16,13 @@ import {
   Loader2,
   Calendar,
   Layers,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { RefundDialog } from "@/components/payments/refund-dialog";
 
 interface PaymentDetail {
   id: string;
@@ -52,6 +54,15 @@ interface PaymentDetail {
     description: string | null;
     createdAt: string;
   }>;
+  refunds?: Array<{
+    id: string;
+    razorpayRefundId: string | null;
+    amount: number;
+    currency: string;
+    status: string;
+    reason: string | null;
+    createdAt: string;
+  }>;
   paymentEvents: Array<{
     id: string;
     fromStatus: string | null;
@@ -79,33 +90,29 @@ export default function PaymentDetailPage() {
   const [payment, setPayment] = React.useState<PaymentDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [isRefundDialogOpen, setIsRefundDialogOpen] = React.useState(false);
+
+  const fetchPayment = React.useCallback(async () => {
+    if (!params.id) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/payments/${params.id}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setPayment(json.data);
+      } else {
+        setError(json.error?.message || "Payment not found");
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load payment");
+    } finally {
+      setLoading(false);
+    }
+  }, [params.id]);
 
   React.useEffect(() => {
-    let isMounted = true;
-    if (!params.id) return;
-
-    fetch(`/api/payments/${params.id}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (isMounted) {
-          if (json.success && json.data) {
-            setPayment(json.data);
-          } else {
-            setError(json.error?.message || "Payment not found");
-          }
-        }
-      })
-      .catch((err) => {
-        if (isMounted) setError(err.message || "Failed to load payment");
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [params.id]);
+    fetchPayment();
+  }, [fetchPayment]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -124,11 +131,18 @@ export default function PaymentDetailPage() {
             <span>FAILED</span>
           </Badge>
         );
+      case "PARTIALLY_REFUNDED":
+        return (
+          <Badge variant="warning" className="gap-1 px-3 py-1 bg-amber-500/10 text-amber-400 border-amber-500/30">
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>PARTIALLY REFUNDED</span>
+          </Badge>
+        );
       case "REFUNDED":
         return (
-          <Badge variant="warning" className="gap-1 px-3 py-1">
+          <Badge variant="warning" className="gap-1 px-3 py-1 bg-rose-500/10 text-rose-400 border-rose-500/30">
             <RotateCcw className="h-3.5 w-3.5" />
-            <span>REFUNDED</span>
+            <span>FULLY REFUNDED</span>
           </Badge>
         );
       case "PENDING":
@@ -166,6 +180,13 @@ export default function PaymentDetailPage() {
     );
   }
 
+  const isEligibleForRefund =
+    (payment.status === "SUCCESS" ||
+      payment.status === "CAPTURED" ||
+      payment.status === "PARTIALLY_REFUNDED") &&
+    payment.ledgerBalance &&
+    payment.ledgerBalance.refundableBalance > 0;
+
   return (
     <div className="space-y-6">
       {/* Top Navigation */}
@@ -178,6 +199,17 @@ export default function PaymentDetailPage() {
         </Link>
 
         <div className="flex items-center gap-2">
+          {isEligibleForRefund && (
+            <Button
+              size="sm"
+              onClick={() => setIsRefundDialogOpen(true)}
+              className="gap-1.5 bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs shadow-md shadow-rose-950/40"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Issue Safe Refund</span>
+            </Button>
+          )}
+
           <Badge variant="outline" className="text-indigo-400 border-indigo-500/30">
             Immutable Double-Entry Ledger
           </Badge>
@@ -233,7 +265,17 @@ export default function PaymentDetailPage() {
 
           <Card className="bg-zinc-900/60 border-zinc-800">
             <CardContent className="p-4 space-y-1">
-              <span className="text-xs text-zinc-400 font-medium">Available Refund Balance</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-400 font-medium">Available Refund Balance</span>
+                {isEligibleForRefund && (
+                  <button
+                    onClick={() => setIsRefundDialogOpen(true)}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 font-medium underline"
+                  >
+                    Refund Now
+                  </button>
+                )}
+              </div>
               <div className="text-xl font-bold text-indigo-400">
                 {formatCurrency(payment.ledgerBalance.refundableBalance, payment.currency)}
               </div>
@@ -409,6 +451,21 @@ export default function PaymentDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Safe Refund Modal */}
+      {isRefundDialogOpen && payment.ledgerBalance && (
+        <RefundDialog
+          isOpen={isRefundDialogOpen}
+          onClose={() => setIsRefundDialogOpen(false)}
+          paymentId={payment.id}
+          razorpayPaymentId={payment.razorpayPaymentId}
+          maxRefundableAmount={payment.ledgerBalance.refundableBalance}
+          currency={payment.currency}
+          onRefundSuccess={() => {
+            fetchPayment();
+          }}
+        />
+      )}
     </div>
   );
 }
