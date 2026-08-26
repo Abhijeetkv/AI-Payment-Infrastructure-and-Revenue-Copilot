@@ -1,37 +1,234 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Payment Infrastructure & Revenue Copilot
 
-## Getting Started
+An enterprise-grade payment operations platform built around **Razorpay Test Mode** that provides deterministic payment orchestration, double-entry financial ledger invariance, multi-tiered idempotency, webhook reliability, anomaly detection, and natural-language revenue intelligence.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🌟 Overview & Capabilities
+
+Traditional payment integrations often suffer from edge cases: dropped webhooks, race conditions resulting in double charges, silent state desynchronization, and complex financial reconciliation. 
+
+**AI Payment Infrastructure & Revenue Copilot** addresses these challenges by combining:
+1. **Deterministic State Machine**: Strict guard transitions across all payment lifecycles preventing invalid states.
+2. **Immutable Double-Entry Ledger**: Double-entry accounting principles (`CREDIT` on capture, `DEBIT` on refund) guarantee zero financial discrepancies.
+3. **Multi-Tiered Idempotency**: Redis distributed locking + cached responses backed by PostgreSQL unique constraints.
+4. **Resilient Webhook Processing**: HMAC-SHA256 signature verification, event deduplication, and durable Inngest background workflows.
+5. **Statistical Anomaly Detection**: 7-day moving averages and z-score deviation scoring detecting failure spikes and drop-offs.
+6. **Conversational AI Copilot**: Grounded AI assistant (Gemini / OpenAI) with controlled database tool-calling for real-time revenue analytics.
+
+---
+
+## 🏛️ System Architecture
+
+```mermaid
+graph TD
+    subgraph "Client Layer"
+        A[Merchant Dashboard] --> B[Next.js App Router]
+        A --> C[Razorpay Test Checkout Modal]
+    end
+
+    subgraph "Application Layer"
+        B --> D[REST API Routes]
+        D --> E[Service Layer]
+        E --> F[Payment State Machine]
+        E --> G[Double-Entry Ledger]
+        E --> H[Razorpay SDK Client]
+        E --> I[AI Abstraction Layer]
+    end
+
+    subgraph "External Gateway & AI"
+        C --> J[Razorpay Test Gateway]
+        H --> J
+        J --> K[Webhook Events]
+        I --> L[Google Gemini / OpenAI]
+    end
+
+    subgraph "Durable Infrastructure"
+        K --> D
+        D --> M[Inngest Event Bus]
+        M --> N[Inngest Step Functions]
+        N --> E
+        G --> O[(PostgreSQL / Prisma 7)]
+        E --> P[(Redis Caching & Locks)]
+    end
+
+    subgraph "Intelligence & Operations"
+        O --> Q[Analytics Engine]
+        Q --> R[Daily Metrics Cron]
+        Q --> S[Anomaly Detection]
+        S --> T[AI Copilot Analysis]
+        R --> T
+    end
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🔄 Payment Lifecycle & State Machine
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED: Order Created
+    CREATED --> PROCESSING: Checkout Initiated
+    CREATED --> FAILED: Pre-authorization Error
+    PROCESSING --> AUTHORIZED: Card/UPI Authorized
+    PROCESSING --> CAPTURED: Direct Capture
+    PROCESSING --> SUCCESS: Payment Verified
+    PROCESSING --> PENDING: Awaiting Bank Confirmation
+    PROCESSING --> FAILED: Bank Declined / Timeout
+    AUTHORIZED --> CAPTURED: Capture API
+    AUTHORIZED --> FAILED: Capture Expired
+    CAPTURED --> SUCCESS: Ledger Recorded
+    CAPTURED --> FAILED: Post-capture Void
+    PENDING --> SUCCESS: Webhook Confirmation
+    PENDING --> FAILED: Webhook Failure
+    SUCCESS --> PARTIALLY_REFUNDED: Partial Refund
+    SUCCESS --> REFUNDED: Full Refund
+    PARTIALLY_REFUNDED --> PARTIALLY_REFUNDED: Additional Partial Refund
+    PARTIALLY_REFUNDED --> REFUNDED: Balance Depleted
+    REFUNDED --> [*]
+    FAILED --> [*]
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Technology Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Layer | Technology | Description |
+|---|---|---|
+| **Framework** | Next.js 16 (App Router + Turbopack) | Full-stack React 19 architecture |
+| **Language** | TypeScript (Strict Mode) | End-to-end type safety |
+| **Database & ORM** | PostgreSQL + Prisma 7 | Schema modeling, driver adapters & migrations |
+| **Caching & Locking** | Redis (`ioredis`) | Distributed mutex locks and idempotency cache |
+| **Auth & Sessions** | Better Auth | Session management & PostgreSQL adapter |
+| **Payment Gateway** | Razorpay Node.js SDK | Order creation, signatures & Test Mode checkout |
+| **Background Workflows** | Inngest | Durable async execution & retries |
+| **AI Intelligence** | Gemini / OpenAI (`ai` SDK) | Tool-calling financial reasoning |
+| **Visual Analytics** | Recharts & Lucide React | High-performance dashboard visualizations |
+| **Validation** | Zod | Runtime API request & response validation |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🔐 Security & Test Mode Policy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+> [!CAUTION]
+> **Zero Real Money Guarantee**:
+> - All Razorpay integrations strictly mandate keys starting with `rzp_test_`. Any attempt to load live production credentials will halt instantiation.
+> - No card numbers, CVVs, PINs, OTPs, or customer credentials are ever transmitted or stored on application servers.
+> - HMAC-SHA256 signature verification is strictly enforced on both client checkout returns and webhook ingestion.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# AI-Payment-Infrastructure-and-Revenue-Copilot
+---
+
+## 🗄️ Database Schema (14 Models)
+
+```mermaid
+erDiagram
+    User ||--o{ Session : has
+    User ||--o{ Account : has
+    User ||--|| Merchant : owns
+    Merchant ||--o{ Order : creates
+    Merchant ||--o{ Payment : receives
+    Merchant ||--o{ Transaction : records
+    Merchant ||--o{ Refund : issues
+    Merchant ||--o{ WebhookEvent : logs
+    Merchant ||--o{ PaymentEvent : tracks
+    Merchant ||--o{ AuditLog : audits
+    Merchant ||--o{ Anomaly : detects
+    Merchant ||--o{ DailyMetric : computes
+    Merchant ||--o{ AIConversation : consults
+    Merchant ||--o{ IdempotencyRecord : locks
+    Order ||--o{ Payment : fulfills
+    Payment ||--o{ Transaction : logs
+    Payment ||--o{ Refund : allows
+    Payment ||--o{ PaymentEvent : generates
+    AIConversation ||--o{ AIMessage : contains
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js 20+
+- PostgreSQL database (Local, Docker, Neon, Supabase, or Railway)
+- Redis instance (Local, Docker, or Upstash)
+- Razorpay Test Account (`rzp_test_...`)
+
+### 2. Installation
+```bash
+# Clone the repository
+git clone https://github.com/Abhijeetkv/AI-Payment-Infrastructure-and-Revenue-Copilot.git
+cd AI-Payment-Infrastructure-and-Revenue-Copilot
+
+# Install dependencies
+npm install
+```
+
+### 3. Environment Configuration
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+
+Configure your environment variables:
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/payment_copilot?schema=public"
+REDIS_URL="redis://localhost:6379"
+BETTER_AUTH_SECRET="generate-a-strong-32-char-random-secret"
+BETTER_AUTH_URL="http://localhost:3000"
+RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxxxx"
+RAZORPAY_KEY_SECRET="your_test_key_secret"
+RAZORPAY_WEBHOOK_SECRET="your_webhook_secret"
+NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxxxx"
+AI_PROVIDER="gemini"
+GEMINI_API_KEY="your-gemini-api-key"
+```
+
+### 4. Database Setup & Prisma Generation
+```bash
+npx prisma generate
+```
+
+### 5. Running the Application
+```bash
+# Start development server
+npm run dev
+
+# Start Inngest local dev server (in separate terminal)
+npx inngest-cli@latest dev
+```
+Open [http://localhost:3000](http://localhost:3000) to view the merchant dashboard.
+
+---
+
+## 🧪 Testing & Verification
+
+```bash
+# Type checking
+npx tsc --noEmit
+
+# Linting
+npm run lint
+
+# Production bundle build
+npm run build
+```
+
+---
+
+## 🗺️ 10-Phase Roadmap & Progress
+
+- [x] **Phase 1 — Foundation**: Scaffolding, strict TS, Prisma 7 with 14 models, Better Auth, Redis & Inngest singletons, server layer, and dashboard shell.
+- [x] **Phase 2 — Razorpay Integration**: Order creation, Razorpay Checkout button SDK, HMAC payment signature verification, and orders/payments UI.
+- [x] **Phase 3 — Database + Ledger + State Machine**: State transition graph engine, double-entry financial ledger (CREDIT/DEBIT), audit logs, and payment detail timeline.
+- [ ] **Phase 4 — Reliability Engineering**: Multi-tiered idempotency (Redis + DB), webhook HMAC verification, deduplication, and Inngest background workers.
+- [ ] **Phase 5 — Refunds**: Full & partial refunds, refundable balance validation, DEBIT ledger entries, and refund processing jobs.
+- [ ] **Phase 6 — Analytics Engine**: Server-side PostgreSQL metrics aggregation, daily rollups cron, and Recharts interactive graphs.
+- [ ] **Phase 7 — Anomaly Detection**: Statistical moving average engine, z-score deviation scoring, and automated alerts.
+- [ ] **Phase 8 — AI Copilot**: Grounded financial assistant with database tool calling and streaming responses.
+- [ ] **Phase 9 — Testing, Security & Failure Simulator**: Comprehensive Vitest suite, rate limiting, and fault injection test simulator.
+- [ ] **Phase 10 — Production Polish & Seed Data**: Realistic high-volume merchant seed generator and documentation finalization.
+
+---
+
+## 📄 License
+MIT License. Built for resilient, AI-powered payment infrastructure operations.
