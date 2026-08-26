@@ -14,15 +14,12 @@ import {
   XCircle,
   Copy,
   Check,
-  Filter,
   Layers,
   ShieldCheck,
   ChevronRight,
-  FileText,
-  AlertCircle,
   ExternalLink,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +74,7 @@ export default function RefundsPage() {
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   // New Refund Modal state
   const [isSelectPaymentOpen, setIsSelectPaymentOpen] = React.useState(false);
@@ -92,32 +90,39 @@ export default function RefundsPage() {
   // Detail Modal state
   const [inspectRefund, setInspectRefund] = React.useState<RefundItem | null>(null);
 
-  const fetchRefunds = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set("metrics", "true");
-      params.set("limit", "50");
-      if (search) params.set("search", search);
-      if (statusFilter !== "ALL") params.set("status", statusFilter);
-
-      const res = await fetch(`/api/refunds?${params.toString()}`);
-      const json = await res.json();
-
-      if (json.success) {
-        setRefunds(json.data || []);
-        if (json.metrics) setMetrics(json.metrics);
-      }
-    } catch (err) {
-      console.error("Failed to load refunds:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [search, statusFilter]);
-
   React.useEffect(() => {
-    fetchRefunds();
-  }, [fetchRefunds]);
+    let isMounted = true;
+    const params = new URLSearchParams();
+    params.set("metrics", "true");
+    params.set("limit", "50");
+    if (search) params.set("search", search);
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+
+    fetch(`/api/refunds?${params.toString()}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isMounted) return;
+        if (json.success) {
+          setRefunds(json.data || []);
+          if (json.metrics) setMetrics(json.metrics);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load refunds:", err);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [search, statusFilter, refreshKey]);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setRefreshKey((k) => k + 1);
+  };
 
   const loadEligiblePayments = async () => {
     try {
@@ -221,7 +226,7 @@ export default function RefundsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchRefunds}
+            onClick={handleRefresh}
             disabled={loading}
             className="gap-1.5"
           >
@@ -549,7 +554,7 @@ export default function RefundsPage() {
           maxRefundableAmount={selectedPaymentForRefund.maxRefundable}
           currency={selectedPaymentForRefund.currency}
           onRefundSuccess={() => {
-            fetchRefunds();
+            handleRefresh();
           }}
         />
       )}

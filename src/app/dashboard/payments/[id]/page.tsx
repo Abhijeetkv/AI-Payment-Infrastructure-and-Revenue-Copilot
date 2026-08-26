@@ -16,7 +16,6 @@ import {
   Loader2,
   Calendar,
   Layers,
-  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,28 +90,34 @@ export default function PaymentDetailPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [isRefundDialogOpen, setIsRefundDialogOpen] = React.useState(false);
-
-  const fetchPayment = React.useCallback(async () => {
-    if (!params.id) return;
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/payments/${params.id}`);
-      const json = await res.json();
-      if (json.success && json.data) {
-        setPayment(json.data);
-      } else {
-        setError(json.error?.message || "Payment not found");
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load payment");
-    } finally {
-      setLoading(false);
-    }
-  }, [params.id]);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
-    fetchPayment();
-  }, [fetchPayment]);
+    let isMounted = true;
+    if (!params.id) return;
+
+    fetch(`/api/payments/${params.id}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isMounted) return;
+        if (json.success && json.data) {
+          setPayment(json.data);
+        } else {
+          setError(json.error?.message || "Payment not found");
+        }
+      })
+      .catch((err: unknown) => {
+        if (!isMounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load payment");
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [params.id, refreshKey]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -462,7 +467,7 @@ export default function PaymentDetailPage() {
           maxRefundableAmount={payment.ledgerBalance.refundableBalance}
           currency={payment.currency}
           onRefundSuccess={() => {
-            fetchPayment();
+            setRefreshKey((k) => k + 1);
           }}
         />
       )}
