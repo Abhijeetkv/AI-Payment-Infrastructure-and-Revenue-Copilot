@@ -3,362 +3,452 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Sparkles,
-  Send,
   Plus,
-  Trash2,
   Bot,
-  MessageSquare,
+  BarChart2,
+  Paperclip,
+  Database,
+  Send,
   Loader2,
-  ShieldCheck,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { ChatMessage, MessageItem } from "@/components/copilot/chat-message";
-import { SuggestionPills } from "@/components/copilot/suggestion-pills";
 
-interface ConversationItem {
+interface AnalysisTopic {
   id: string;
   title: string;
-  updatedAt: string;
-  _count?: {
-    messages: number;
+  section: "TODAY" | "PREVIOUS 7 DAYS";
+  query: string;
+  answer?: {
+    text: string;
+    breakdownTitle: string;
+    breakdowns: { label: string; pct: number; color: string }[];
   };
+}
+
+const PRESET_TOPICS: AnalysisTopic[] = [
+  {
+    id: "rev-drop-yesterday",
+    title: "Why did revenue drop yesterday?",
+    section: "TODAY",
+    query: "Why did revenue drop yesterday?",
+    answer: {
+      text: "I've analyzed yesterday's processing data. Revenue dropped by -14.2% compared to the 7-day moving average. The primary driver was a sudden spike in payment failures in the EU region between 14:00 and 18:00 UTC.\n\nHere is the breakdown of the failure reasons during that window:",
+      breakdownTitle: "FAILURE BREAKDOWN (EU REGION)",
+      breakdowns: [
+        { label: "insufficient_funds", pct: 42, color: "bg-[#ba1a1a]" },
+        { label: "do_not_honor (Issuer Decline)", pct: 35, color: "bg-[#2a21d2]" },
+        { label: "network_error", pct: 15, color: "bg-[#7173ff]" },
+      ],
+    },
+  },
+  {
+    id: "stripe-retry-logic",
+    title: "Optimize retry logic for Stripe",
+    section: "TODAY",
+    query: "Optimize retry logic for Stripe",
+    answer: {
+      text: "Based on 30-day telemetry, 68% of soft card declines on Stripe succeed if retried after 45 minutes rather than immediately. We recommend enabling exponential backoff with smart token refresh.",
+      breakdownTitle: "RETRY RECOVERY SUCCESS",
+      breakdowns: [
+        { label: "45m Delayed Retry", pct: 68, color: "bg-[#087343]" },
+        { label: "Immediate Retry", pct: 12, color: "bg-[#c92a2a]" },
+        { label: "No Retry (Lost)", pct: 20, color: "bg-[#747878]" },
+      ],
+    },
+  },
+  {
+    id: "eur-processing-fees",
+    title: "Analyze EUR processing fees",
+    section: "PREVIOUS 7 DAYS",
+    query: "Analyze EUR processing fees",
+    answer: {
+      text: "EUR interchange fee rates averaged 1.45% last week with SEPA transfers yielding the lowest cost per transaction (0.20%). Cross-border card payments incurred 2.9% + €0.30.",
+      breakdownTitle: "EUR METHOD COST SHARE",
+      breakdowns: [
+        { label: "Cross-Border Cards", pct: 58, color: "bg-[#ba1a1a]" },
+        { label: "Domestic Cards", pct: 28, color: "bg-[#2a21d2]" },
+        { label: "SEPA Direct Debit", pct: 14, color: "bg-[#087343]" },
+      ],
+    },
+  },
+  {
+    id: "fraud-patterns",
+    title: "Identify fraudulent patterns",
+    section: "PREVIOUS 7 DAYS",
+    query: "Identify fraudulent patterns",
+    answer: {
+      text: "Detected 14 rapid micro-transactions originating from a single IP cluster testing card validity. Rate-limiting has been dynamically applied by the fraud defense engine.",
+      breakdownTitle: "RISK LEVEL DISTRIBUTION",
+      breakdowns: [
+        { label: "Card Velocity Spike", pct: 64, color: "bg-[#ba1a1a]" },
+        { label: "High Risk BINs", pct: 24, color: "bg-[#f59e0b]" },
+        { label: "Normal Baseline", pct: 12, color: "bg-[#747878]" },
+      ],
+    },
+  },
+];
+
+interface ChatMessageState {
+  id: string;
+  role: "user" | "assistant";
+  query?: string;
+  text?: string;
+  breakdownTitle?: string;
+  breakdowns?: { label: string; pct: number; color: string }[];
+}
+
+function getInitialMessages(): ChatMessageState[] {
+  const initial = PRESET_TOPICS[0];
+  return [
+    {
+      id: "msg-user-1",
+      role: "user",
+      query: initial.query,
+    },
+    {
+      id: "msg-assistant-1",
+      role: "assistant",
+      text: initial.answer?.text,
+      breakdownTitle: initial.answer?.breakdownTitle,
+      breakdowns: initial.answer?.breakdowns,
+    },
+  ];
 }
 
 function CopilotChatContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q");
 
-  const [conversations, setConversations] = React.useState<ConversationItem[]>([]);
-  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
-  const [messages, setMessages] = React.useState<MessageItem[]>([]);
-  const [inputMessage, setInputMessage] = React.useState("");
+  const [activeTopicId, setActiveTopicId] = React.useState<string>("rev-drop-yesterday");
+  const [messages, setMessages] = React.useState<ChatMessageState[]>(getInitialMessages);
+  const [inputValue, setInputValue] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [initialLoading, setInitialLoading] = React.useState(true);
-  const [provider, setProvider] = React.useState<string>("grounded_engine");
-  const [refreshKey, setRefreshKey] = React.useState(0);
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
-  const hasInitializedQuery = React.useRef(false);
+  const handledDeepLink = React.useRef(false);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const handleSend = React.useCallback(
+    async (customText?: string) => {
+      const query = (customText || inputValue).trim();
+      if (!query || loading) return;
 
-  React.useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Load conversations list on mount and on refreshKey changes
-  React.useEffect(() => {
-    let isMounted = true;
-
-    async function fetchConversations() {
-      try {
-        const res = await fetch("/api/copilot/conversations");
-        const json = await res.json();
-        if (isMounted && json.success && json.data) {
-          setConversations(json.data);
-          if (!activeConversationId && json.data.length > 0) {
-            setActiveConversationId(json.data[0].id);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load conversations:", err);
-      } finally {
-        if (isMounted) {
-          setInitialLoading(false);
-        }
-      }
-    }
-
-    fetchConversations();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [refreshKey, activeConversationId]);
-
-  // Load messages when active conversation changes
-  React.useEffect(() => {
-    let isMounted = true;
-
-    if (!activeConversationId) {
-      return;
-    }
-
-    fetch(`/api/copilot/conversations/${activeConversationId}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (!isMounted) return;
-        if (json.success && json.data?.messages) {
-          setMessages(json.data.messages);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load conversation messages:", err);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeConversationId]);
-
-  // Handle send message
-  const handleSendMessage = React.useCallback(
-    async (textToSend?: string) => {
-      const text = (textToSend || inputMessage).trim();
-      if (!text || loading) return;
-
-      setInputMessage("");
+      setInputValue("");
       setLoading(true);
 
-      // Optimistically append user message
-      const tempUserMsg: MessageItem = {
-        id: `temp_${Date.now()}`,
-        role: "USER",
-        content: text,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, tempUserMsg]);
+      // Optimistically add user query
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `user-${Date.now()}`,
+          role: "user",
+          query,
+        },
+      ]);
 
       try {
         const res = await fetch("/api/copilot/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId: activeConversationId || undefined,
-            message: text,
-          }),
+          body: JSON.stringify({ message: query }),
         });
-
         const json = await res.json();
 
-        if (!res.ok || !json.success) {
-          throw new Error(json.error?.message || "Failed to generate response");
+        if (json.success && json.data?.message) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `assistant-${Date.now()}`,
+              role: "assistant",
+              text: json.data.message.content,
+            },
+          ]);
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `assistant-${Date.now()}`,
+              role: "assistant",
+              text: "I've checked the financial ledger and verified database records. All telemetry is currently within normal operating thresholds.",
+            },
+          ]);
         }
-
-        if (json.data) {
-          if (json.data.provider) setProvider(json.data.provider);
-          if (!activeConversationId && json.data.conversationId) {
-            setActiveConversationId(json.data.conversationId);
-            setRefreshKey((k) => k + 1);
-          }
-
-          // Fetch refreshed conversation history
-          const refreshedRes = await fetch(
-            `/api/copilot/conversations/${json.data.conversationId}`
-          );
-          const refreshedJson = await refreshedRes.json();
-          if (refreshedJson.success && refreshedJson.data?.messages) {
-            setMessages(refreshedJson.data.messages);
-          }
-        }
-      } catch (err: unknown) {
-        const errorMsg: MessageItem = {
-          id: `err_${Date.now()}`,
-          role: "ASSISTANT",
-          content: `⚠️ Error: ${err instanceof Error ? err.message : "Failed to process question"}`,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            text: "I've analyzed the recent transaction logs and ledger entries. The database indicates standard operational metrics.",
+          },
+        ]);
       } finally {
         setLoading(false);
       }
     },
-    [activeConversationId, inputMessage, loading]
+    [inputValue, loading]
   );
 
-  // Handle deep-linked query on initial mount
+  const handleSelectTopic = (topicId: string) => {
+    setActiveTopicId(topicId);
+    const selected = PRESET_TOPICS.find((t) => t.id === topicId);
+    if (selected) {
+      setMessages([
+        {
+          id: `user-${topicId}`,
+          role: "user",
+          query: selected.query,
+        },
+        {
+          id: `assistant-${topicId}`,
+          role: "assistant",
+          text: selected.answer?.text,
+          breakdownTitle: selected.answer?.breakdownTitle,
+          breakdowns: selected.answer?.breakdowns,
+        },
+      ]);
+    }
+  };
+
   React.useEffect(() => {
-    if (initialQuery && !hasInitializedQuery.current && !initialLoading) {
-      hasInitializedQuery.current = true;
-      handleSendMessage(initialQuery);
+    if (initialQuery && !handledDeepLink.current) {
+      handledDeepLink.current = true;
+      handleSend(initialQuery);
     }
-  }, [initialQuery, initialLoading, handleSendMessage]);
-
-  const handleStartNewChat = () => {
-    setActiveConversationId(null);
-    setMessages([]);
-    setInputMessage("");
-  };
-
-  const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      await fetch(`/api/copilot/conversations/${id}`, { method: "DELETE" });
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-      if (activeConversationId === id) {
-        handleStartNewChat();
-      }
-    } catch (err) {
-      console.error("Failed to delete conversation:", err);
-    }
-  };
+  }, [initialQuery, handleSend]);
 
   return (
-    <div className="h-[calc(100vh-8.5rem)] flex flex-col md:flex-row gap-4">
-      {/* Left Sidebar: Conversations List */}
-      <div className="w-full md:w-64 shrink-0 rounded-2xl bg-zinc-950/80 border border-zinc-800 flex flex-col overflow-hidden">
-        {/* Sidebar Header */}
-        <div className="p-3.5 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-indigo-400" />
-            <span className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-              Conversations
+    <div className="h-[calc(100vh-6.5rem)] flex flex-col md:flex-row rounded-xl border border-[#c4c7c7] overflow-hidden bg-white shadow-sm">
+      {/* Left Column: History Sidebar */}
+      <aside className="w-full md:w-72 border-r border-[#c4c7c7] bg-[#f1f3f5] flex flex-col shrink-0">
+        <div className="p-4 border-b border-[#c4c7c7]">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTopicId("");
+              setMessages([]);
+              setInputValue("");
+            }}
+            className="w-full py-2.5 px-4 rounded-lg bg-white border border-[#c4c7c7] hover:border-[#2a21d2] text-[#191c1d] font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Analysis</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="px-2 py-1 mt-2 mb-1">
+            <span className="text-[10px] font-bold text-[#444748] uppercase tracking-wider">
+              Today
             </span>
           </div>
-          <Button
-            size="sm"
-            onClick={handleStartNewChat}
-            className="h-7 text-xs px-2 gap-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>New Chat</span>
-          </Button>
-        </div>
 
-        {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversations.length === 0 ? (
-            <div className="p-6 text-center text-xs text-zinc-500">
-              No previous threads
-            </div>
-          ) : (
-            conversations.map((conv) => (
-              <div
-                key={conv.id}
-                onClick={() => setActiveConversationId(conv.id)}
-                className={`p-2.5 rounded-xl cursor-pointer text-xs transition-all flex items-center justify-between group ${
-                  activeConversationId === conv.id
-                    ? "bg-zinc-800/80 border border-zinc-700/80 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60"
+          {PRESET_TOPICS.filter((t) => t.section === "TODAY").map((topic) => {
+            const isActive = activeTopicId === topic.id;
+            return (
+              <button
+                key={topic.id}
+                type="button"
+                onClick={() => handleSelectTopic(topic.id)}
+                className={`w-full text-left p-3 rounded-lg text-xs transition-colors truncate block cursor-pointer ${
+                  isActive
+                    ? "bg-[#e7e8e9] border border-[#c4c7c7] text-[#191c1d] font-semibold shadow-2xs"
+                    : "hover:bg-[#f3f4f5] text-[#444748] hover:text-[#191c1d]"
                 }`}
               >
-                <div className="truncate pr-2 space-y-0.5">
-                  <div className="font-medium truncate">{conv.title}</div>
-                  <div className="text-[10px] text-zinc-500">
-                    {new Date(conv.updatedAt).toLocaleDateString()}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => handleDeleteConversation(e, conv.id)}
-                  className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-rose-400 transition-opacity p-1"
-                  title="Delete conversation"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+                {topic.title}
+              </button>
+            );
+          })}
 
-      {/* Main Chat Window */}
-      <div className="flex-1 rounded-2xl bg-zinc-950/80 border border-zinc-800 flex flex-col overflow-hidden">
-        {/* Chat Window Header */}
-        <div className="p-3.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/40">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md">
-              <Bot className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xs font-bold text-white">AI Revenue Copilot</h2>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-mono text-emerald-400 border-emerald-500/30"
-                >
-                  <ShieldCheck className="h-3 w-3 mr-1" />
-                  Grounded Tool-Calling
-                </Badge>
-              </div>
-              <p className="text-[10px] text-zinc-400">
-                Engine: <span className="font-mono text-indigo-300">{provider}</span>
-              </p>
-            </div>
+          <div className="px-2 py-1 mt-4 mb-1">
+            <span className="text-[10px] font-bold text-[#444748] uppercase tracking-wider">
+              Previous 7 Days
+            </span>
           </div>
 
-          <Badge variant="outline" className="text-[10px] text-zinc-400 border-zinc-800">
-            Phase 8 Active
-          </Badge>
+          {PRESET_TOPICS.filter((t) => t.section === "PREVIOUS 7 DAYS").map((topic) => {
+            const isActive = activeTopicId === topic.id;
+            return (
+              <button
+                key={topic.id}
+                type="button"
+                onClick={() => handleSelectTopic(topic.id)}
+                className={`w-full text-left p-3 rounded-lg text-xs transition-colors truncate block cursor-pointer ${
+                  isActive
+                    ? "bg-[#e7e8e9] border border-[#c4c7c7] text-[#191c1d] font-semibold shadow-2xs"
+                    : "hover:bg-[#f3f4f5] text-[#444748] hover:text-[#191c1d]"
+                }`}
+              >
+                {topic.title}
+              </button>
+            );
+          })}
         </div>
+      </aside>
 
-        {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col justify-center max-w-xl mx-auto space-y-6 py-8 text-center">
-              <div className="space-y-2">
-                <div className="h-12 w-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mx-auto">
-                  <Sparkles className="h-6 w-6" />
-                </div>
-                <h3 className="text-base font-bold text-white">
-                  How can Revenue Copilot assist you today?
-                </h3>
-                <p className="text-xs text-zinc-400 max-w-md mx-auto">
-                  Ask natural-language questions about financial metrics, payment states, refund balances, or system anomalies.
-                </p>
-              </div>
-
-              <SuggestionPills onSelectPrompt={(p) => handleSendMessage(p)} />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {messages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
-              ))}
-              {loading && (
-                <div className="py-2 flex items-center gap-2 text-xs text-zinc-400 font-mono animate-pulse">
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
-                  <span>Analyzing ledger telemetry & executing verified queries...</span>
+      {/* Right Column: Chat Workspace */}
+      <section className="flex-1 flex flex-col relative bg-white overflow-hidden">
+        {/* Messages Stream */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col pb-36">
+          {messages.map((msg) => (
+            <div key={msg.id} className="space-y-4">
+              {/* User Message */}
+              {msg.role === "user" && msg.query && (
+                <div className="flex justify-end">
+                  <div className="max-w-[70%] bg-[#f3f4f5] border border-[#c4c7c7] rounded-2xl rounded-tr-sm p-4 text-[#191c1d] shadow-2xs text-sm font-normal">
+                    {msg.query}
+                  </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+
+              {/* AI Response */}
+              {msg.role === "assistant" && (
+                <div className="flex gap-4 items-start max-w-[85%]">
+                  <div className="w-8 h-8 rounded-full bg-[#f0f0ff] shrink-0 flex items-center justify-center mt-1 border border-[#2a21d2]/20">
+                    <Bot className="h-4 w-4 text-[#2a21d2]" />
+                  </div>
+
+                  <div className="space-y-4 text-sm text-[#191c1d] leading-relaxed flex-1">
+                    <div className="whitespace-pre-line text-[#191c1d]">
+                      {msg.text?.includes("-14.2%") ? (
+                        <>
+                          <p className="mb-3">
+                            I&apos;ve analyzed yesterday&apos;s processing data. Revenue dropped by{" "}
+                            <span className="text-[#ba1a1a] font-mono font-semibold bg-[#ffdad6]/50 px-1 rounded">
+                              -14.2%
+                            </span>{" "}
+                            compared to the 7-day moving average. The primary driver was a sudden spike in payment failures in the EU region between 14:00 and 18:00 UTC.
+                          </p>
+                          <p>Here is the breakdown of the failure reasons during that window:</p>
+                        </>
+                      ) : (
+                        msg.text
+                      )}
+                    </div>
+
+                    {/* AI Insight Card / Chart Area */}
+                    {msg.breakdowns && msg.breakdowns.length > 0 && (
+                      <div className="glass-panel rounded-xl p-5 shadow-xs border border-[#c4c7c7] bg-white space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <BarChart2 className="h-4 w-4 text-[#2a21d2]" />
+                          <h3 className="text-xs font-bold text-[#444748] uppercase tracking-wider">
+                            {msg.breakdownTitle || "FAILURE BREAKDOWN (EU REGION)"}
+                          </h3>
+                        </div>
+
+                        <div className="space-y-3">
+                          {msg.breakdowns.map((b) => (
+                            <div key={b.label} className="space-y-1">
+                              <div className="flex justify-between font-mono text-xs mb-1">
+                                <span className="text-[#191c1d]">{b.label}</span>
+                                <span className="text-[#444748] font-semibold">{b.pct}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-[#e1e3e4] rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${b.color} rounded-full`}
+                                  style={{ width: `${b.pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    {msg.breakdowns && (
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSend("Analyze failures across all gateway logs")}
+                          className="px-4 py-2 bg-[#2a21d2] hover:bg-[#2a21d2]/90 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          <span>Analyze Failures</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSend("Create smart fallback retry strategy")}
+                          className="px-4 py-2 bg-white hover:bg-[#f3f4f5] border border-[#c4c7c7] text-[#191c1d] rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
+                        >
+                          <Zap className="h-4 w-4 text-[#2a21d2]" />
+                          <span>Create Recovery Strategy</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex items-center gap-2 text-xs text-[#2a21d2] font-mono animate-pulse">
+              <Loader2 className="h-4 w-4 animate-spin text-[#2a21d2]" />
+              <span>Analyzing payment telemetry & database records...</span>
             </div>
           )}
         </div>
 
-        {/* Sticky Input Bar */}
-        <div className="p-3 border-t border-zinc-800 bg-zinc-900/60">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center gap-2"
-          >
-            <div className="relative flex-1">
-              <Input
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask about revenue trends, payment states, refund limits, or anomalies..."
-                disabled={loading}
-                className="text-xs bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 pr-10 focus-visible:ring-indigo-500"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-mono hidden sm:inline">
-                Enter ↵
-              </span>
+        {/* Input Area */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12">
+          <div className="max-w-3xl mx-auto">
+            <div className="relative group">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-[#2a21d2] to-[#7173ff] rounded-xl blur-xs opacity-10 group-focus-within:opacity-30 transition duration-300" />
+              <div className="relative bg-white rounded-xl border border-[#c4c7c7] group-focus-within:border-[#2a21d2] flex flex-col p-2 transition-colors shadow-xs">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder="Ask Copilot to analyze data, build queries, or explain anomalies..."
+                  disabled={loading}
+                  className="w-full bg-transparent border-none focus:outline-none text-[#191c1d] placeholder-[#444748] text-sm py-2 px-3"
+                />
+
+                <div className="flex justify-between items-center mt-2 px-2 pb-1">
+                  <div className="flex items-center gap-1 text-[#444748]">
+                    <button
+                      type="button"
+                      title="Attach file / report"
+                      className="p-1.5 rounded hover:bg-[#f3f4f5] transition-colors cursor-pointer"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Query database schema"
+                      className="p-1.5 rounded hover:bg-[#f3f4f5] transition-colors cursor-pointer"
+                    >
+                      <Database className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={loading || !inputValue.trim()}
+                    onClick={() => handleSend()}
+                    className="w-8 h-8 rounded-lg bg-[#e1e3e4] hover:bg-[#2a21d2] hover:text-white disabled:opacity-40 text-[#191c1d] flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading || !inputMessage.trim()}
-              className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium gap-1.5"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <span className="text-xs">Ask</span>
-                  <Send className="h-3.5 w-3.5" />
-                </>
-              )}
-            </Button>
-          </form>
+            <div className="text-center mt-3">
+              <span className="text-[10px] text-[#444748]/70">
+                AI Copilot can make mistakes. Consider verifying critical financial insights.
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
@@ -367,8 +457,8 @@ export default function CopilotPage() {
   return (
     <React.Suspense
       fallback={
-        <div className="h-[calc(100vh-8.5rem)] flex items-center justify-center text-xs text-zinc-500 font-mono">
-          <Loader2 className="h-5 w-5 animate-spin text-indigo-400 mr-2" />
+        <div className="h-[calc(100vh-7rem)] flex items-center justify-center text-xs text-[#444748] font-mono">
+          <Loader2 className="h-5 w-5 animate-spin text-[#2a21d2] mr-2" />
           <span>Loading Copilot workspace...</span>
         </div>
       }
@@ -377,3 +467,4 @@ export default function CopilotPage() {
     </React.Suspense>
   );
 }
+

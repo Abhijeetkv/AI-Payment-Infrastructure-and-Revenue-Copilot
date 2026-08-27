@@ -39,21 +39,21 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
 
   return (
-    <div className="rounded-xl bg-zinc-950/95 border border-zinc-800 p-3 shadow-2xl backdrop-blur-md space-y-1.5 text-xs font-mono">
-      <div className="font-semibold text-zinc-300 border-b border-zinc-800 pb-1">
+    <div className="rounded-lg bg-white border border-[#e9ecef] p-3 shadow-md space-y-1.5 text-xs font-mono">
+      <div className="font-semibold text-[#191c1d] border-b border-[#e9ecef] pb-1 font-sans">
         {label}
       </div>
       <div className="space-y-1">
         {payload.map((entry, idx) => (
           <div key={idx} className="flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5 text-zinc-400">
+            <span className="flex items-center gap-1.5 text-[#444748]">
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
               <span>{entry.name}:</span>
             </span>
-            <span className="font-bold text-white">{entry.value}</span>
+            <span className="font-bold text-[#191c1d]">{entry.value}</span>
           </div>
         ))}
       </div>
@@ -87,19 +87,19 @@ export function VolumeBarChart({
           data={formattedData}
           margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" vertical={false} />
           <XAxis
             dataKey="displayDate"
-            stroke="#71717a"
+            stroke="#747878"
             fontSize={11}
             tickLine={false}
-            axisLine={{ stroke: "#27272a" }}
+            axisLine={{ stroke: "#e9ecef" }}
           />
           <YAxis
-            stroke="#71717a"
+            stroke="#747878"
             fontSize={11}
             tickLine={false}
-            axisLine={{ stroke: "#27272a" }}
+            axisLine={{ stroke: "#e9ecef" }}
             allowDecimals={false}
           />
           <Tooltip content={<CustomTooltip />} />
@@ -107,20 +107,20 @@ export function VolumeBarChart({
             verticalAlign="top"
             align="right"
             iconType="circle"
-            wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
+            wrapperStyle={{ fontSize: 11, paddingBottom: 8, color: "#444748" }}
           />
           <Bar
             dataKey="successfulCount"
             name="Successful"
             stackId="a"
-            fill="#10b981"
+            fill="#087343"
             radius={[0, 0, 0, 0]}
           />
           <Bar
             dataKey="failedCount"
             name="Failed"
             stackId="a"
-            fill="#f43f5e"
+            fill="#c92a2a"
             radius={[4, 4, 0, 0]}
           />
         </BarChart>
@@ -128,3 +128,4 @@ export function VolumeBarChart({
     </div>
   );
 }
+

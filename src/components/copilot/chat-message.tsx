@@ -45,28 +45,25 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
   return (
     <div
-      className={`py-3 flex gap-3 text-xs leading-relaxed group ${
-        isUser ? "flex-row-reverse" : "flex-row"
-      }`}
+      className={`py-3 flex gap-3 text-xs leading-relaxed group ${isUser ? "flex-row-reverse" : "flex-row"
+        }`}
     >
       {/* Avatar */}
       <div
-        className={`h-8 w-8 rounded-xl shrink-0 flex items-center justify-center shadow-sm ${
-          isUser
+        className={`h-8 w-8 rounded-xl shrink-0 flex items-center justify-center shadow-sm ${isUser
             ? "bg-zinc-800 text-zinc-200"
             : "bg-gradient-to-br from-indigo-600 to-indigo-700 text-white"
-        }`}
+          }`}
       >
         {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
       </div>
 
       {/* Message Content Bubble */}
       <div
-        className={`max-w-2xl rounded-2xl p-4 space-y-2 relative transition-all shadow-sm ${
-          isUser
+        className={`max-w-2xl rounded-2xl p-4 space-y-2 relative transition-all shadow-sm ${isUser
             ? "bg-indigo-600 text-white rounded-tr-sm"
             : "bg-zinc-900/90 border border-zinc-800 text-zinc-100 rounded-tl-sm"
-        }`}
+          }`}
       >
         <div className="flex items-center justify-between gap-4 pb-1 border-b border-white/10">
           <span className="font-semibold text-[11px] opacity-80">

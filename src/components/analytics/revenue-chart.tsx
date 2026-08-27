@@ -40,21 +40,21 @@ function CustomTooltip({ active, payload, label, currency = "INR" }: CustomToolt
   if (!active || !payload || payload.length === 0) return null;
 
   return (
-    <div className="rounded-xl bg-zinc-950/95 border border-zinc-800 p-3 shadow-2xl backdrop-blur-md space-y-2 text-xs font-mono">
-      <div className="font-semibold text-zinc-300 border-b border-zinc-800 pb-1">
+    <div className="rounded-lg bg-white border border-[#e9ecef] p-3 shadow-md space-y-2 text-xs font-mono">
+      <div className="font-semibold text-[#191c1d] border-b border-[#e9ecef] pb-1 font-sans">
         {label}
       </div>
       <div className="space-y-1">
         {payload.map((entry, idx) => (
           <div key={idx} className="flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5 text-zinc-400">
+            <span className="flex items-center gap-1.5 text-[#444748]">
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
               <span>{entry.name}:</span>
             </span>
-            <span className="font-bold text-white">
+            <span className="font-bold text-[#191c1d]">
               {formatCurrency(entry.value, currency)}
             </span>
           </div>
@@ -69,7 +69,6 @@ export function RevenueChart({
   currency = "INR",
   height = 320,
 }: RevenueChartProps) {
-  // Format short date for X-Axis (e.g., "26 Aug")
   const formattedData = React.useMemo(() => {
     return data.map((item) => {
       const parts = item.date.split("-");
@@ -94,38 +93,38 @@ export function RevenueChart({
         >
           <defs>
             <linearGradient id="grossGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+              <stop offset="5%" stopColor="#2a21d2" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#2a21d2" stopOpacity={0.0} />
             </linearGradient>
             <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+              <stop offset="5%" stopColor="#087343" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#087343" stopOpacity={0.0} />
             </linearGradient>
             <linearGradient id="refundGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
+              <stop offset="5%" stopColor="#c92a2a" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#c92a2a" stopOpacity={0.0} />
             </linearGradient>
           </defs>
 
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#27272a"
+            stroke="#e9ecef"
             vertical={false}
           />
 
           <XAxis
             dataKey="displayDate"
-            stroke="#71717a"
+            stroke="#747878"
             fontSize={11}
             tickLine={false}
-            axisLine={{ stroke: "#27272a" }}
+            axisLine={{ stroke: "#e9ecef" }}
           />
 
           <YAxis
-            stroke="#71717a"
+            stroke="#747878"
             fontSize={11}
             tickLine={false}
-            axisLine={{ stroke: "#27272a" }}
+            axisLine={{ stroke: "#e9ecef" }}
             tickFormatter={(val) => `₹${Math.round(val / 100).toLocaleString()}`}
           />
 
@@ -135,7 +134,7 @@ export function RevenueChart({
             type="monotone"
             dataKey="grossRevenue"
             name="Gross Revenue"
-            stroke="#6366f1"
+            stroke="#2a21d2"
             strokeWidth={2}
             fillOpacity={1}
             fill="url(#grossGradient)"
@@ -145,7 +144,7 @@ export function RevenueChart({
             type="monotone"
             dataKey="netRevenue"
             name="Net Revenue"
-            stroke="#10b981"
+            stroke="#087343"
             strokeWidth={2}
             fillOpacity={1}
             fill="url(#netGradient)"
@@ -155,7 +154,7 @@ export function RevenueChart({
             type="monotone"
             dataKey="refundAmount"
             name="Refunds"
-            stroke="#f43f5e"
+            stroke="#c92a2a"
             strokeWidth={1.5}
             strokeDasharray="4 4"
             fillOpacity={1}
@@ -166,3 +165,4 @@ export function RevenueChart({
     </div>
   );
 }
+

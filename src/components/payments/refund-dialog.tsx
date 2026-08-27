@@ -213,9 +213,8 @@ export function RefundDialog({
                     setAmountInput(e.target.value);
                     setError(null);
                   }}
-                  className={`pl-8 font-mono bg-zinc-900 border-zinc-800 ${
-                    isOverLimit ? "border-rose-500 focus-visible:ring-rose-500" : ""
-                  }`}
+                  className={`pl-8 font-mono bg-zinc-900 border-zinc-800 ${isOverLimit ? "border-rose-500 focus-visible:ring-rose-500" : ""
+                    }`}
                   placeholder="0.00"
                   required
                 />
@@ -263,11 +262,10 @@ export function RefundDialog({
                 <button
                   type="button"
                   onClick={() => setSpeed("normal")}
-                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
-                    speed === "normal"
+                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${speed === "normal"
                       ? "bg-indigo-950/40 border-indigo-500/60 text-white"
                       : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200"
-                  }`}
+                    }`}
                 >
                   <div className="font-semibold">Normal Speed</div>
                   <div className="text-[10px] text-zinc-400">5-7 Business Days</div>
@@ -275,11 +273,10 @@ export function RefundDialog({
                 <button
                   type="button"
                   onClick={() => setSpeed("optimum")}
-                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
-                    speed === "optimum"
+                  className={`p-2.5 rounded-lg border text-left text-xs transition-all ${speed === "optimum"
                       ? "bg-indigo-950/40 border-indigo-500/60 text-white"
                       : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200"
-                  }`}
+                    }`}
                 >
                   <div className="font-semibold">Optimum / Instant</div>
                   <div className="text-[10px] text-zinc-400">Instant via UPI/IMPS</div>

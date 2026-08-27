@@ -14,7 +14,6 @@ import {
   ArrowRight,
   Clock,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -113,40 +112,54 @@ export default function SimulatorPage() {
   const getStepStatusBadge = (status: SimulationStep["status"]) => {
     switch (status) {
       case "SUCCESS":
-        return <Badge variant="success" className="text-[10px]">SUCCESS</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20 uppercase">
+            SUCCESS
+          </span>
+        );
       case "BLOCKED_SAFELY":
-        return <Badge variant="default" className="bg-indigo-600/20 text-indigo-300 border-indigo-500/30 text-[10px]">BLOCKED SAFELY</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#f0f0ff] text-[#2a21d2] border border-[#2a21d2]/20 uppercase">
+            BLOCKED SAFELY
+          </span>
+        );
       case "FAILED_EXPECTED":
-        return <Badge variant="warning" className="text-[10px]">FAULT INJECTED</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#f59e0b]/10 text-[#b45309] border border-[#f59e0b]/20 uppercase">
+            FAULT INJECTED
+          </span>
+        );
       case "RECONCILED":
-        return <Badge variant="outline" className="text-emerald-400 border-emerald-500/40 text-[10px]">RECONCILED</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20 uppercase">
+            RECONCILED
+          </span>
+        );
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#e9ecef] pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Payment Reliability & Fault Simulator
-            </h1>
-            <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
-              Phase 9 Active
-            </Badge>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#191c1d]">
+              Payment Fault Simulator
+            </h2>
+            <Badge variant="success">Resilience Engine</Badge>
           </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Execute chaos engineering simulations to verify multi-tiered idempotency, HMAC security, distributed locking, and ledger invariance.
+          <p className="text-sm text-[#444748] mt-1 font-normal">
+            Execute chaos engineering simulations to verify multi-tiered idempotency, HMAC security, and ledger invariance.
           </p>
         </div>
 
         <Button
           onClick={() => handleRunScenario()}
           disabled={running}
-          className="gap-2 bg-rose-600 hover:bg-rose-500 text-white font-medium shadow-md shadow-rose-950/30 text-xs h-9 px-4"
+          className="h-9 gap-2 bg-[#000000] hover:bg-[#1c1b1b] text-white font-semibold shadow-xs text-xs px-4 cursor-pointer"
         >
-          <Play className={`h-3.5 w-3.5 ${running ? "animate-spin" : ""}`} />
+          <Play className={`h-3.5 w-3.5 ${running ? "animate-spin text-[#2a21d2]" : ""}`} />
           <span>{running ? "Simulating Chaos..." : "Execute Selected Scenario"}</span>
         </Button>
       </div>
@@ -164,38 +177,38 @@ export default function SimulatorPage() {
                 setSelectedScenario(s.type);
                 handleRunScenario(s.type);
               }}
-              className={`p-4 rounded-2xl cursor-pointer transition-all border flex flex-col justify-between space-y-3 ${
+              className={`p-4 rounded-lg cursor-pointer transition-all border flex flex-col justify-between space-y-3 ${
                 isSelected
-                  ? "bg-zinc-900 border-indigo-500 shadow-md ring-1 ring-indigo-500/50"
-                  : "bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60"
+                  ? "bg-[#f0f0ff]/60 border-[#2a21d2] shadow-xs"
+                  : "bg-white border-[#e9ecef] hover:border-[#c4c7c7] hover:bg-[#f8f9fa]"
               }`}
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div
-                    className={`h-8 w-8 rounded-xl flex items-center justify-center ${
+                    className={`h-8 w-8 rounded-md flex items-center justify-center ${
                       isSelected
-                        ? "bg-indigo-600 text-white"
-                        : "bg-zinc-900 text-zinc-400 border border-zinc-800"
+                        ? "bg-[#2a21d2] text-white"
+                        : "bg-[#f3f4f5] text-[#444748] border border-[#e9ecef]"
                     }`}
                   >
                     <Icon className="h-4 w-4" />
                   </div>
-                  <Badge variant="outline" className="text-[9px] font-mono text-zinc-400">
+                  <span className="text-[9px] font-mono text-[#747878] font-semibold bg-[#f3f4f5] px-1.5 py-0.5 rounded border border-[#e9ecef]">
                     {s.badge}
-                  </Badge>
+                  </span>
                 </div>
-                <h3 className="text-xs font-bold text-white">{s.title}</h3>
-                <p className="text-[11px] text-zinc-400 line-clamp-3 leading-relaxed">
+                <h3 className="text-xs font-bold text-[#191c1d]">{s.title}</h3>
+                <p className="text-[11px] text-[#444748] line-clamp-3 leading-relaxed">
                   {s.description}
                 </p>
               </div>
 
-              <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[10px] font-mono">
-                <span className={isSelected ? "text-indigo-400 font-semibold" : "text-zinc-500"}>
+              <div className="pt-2 border-t border-[#e9ecef] flex items-center justify-between text-[10px] font-mono">
+                <span className={isSelected ? "text-[#2a21d2] font-semibold" : "text-[#747878]"}>
                   {isSelected ? "Active Scenario" : "Click to Run"}
                 </span>
-                <ArrowRight className={`h-3 w-3 ${isSelected ? "text-indigo-400" : "text-zinc-600"}`} />
+                <ArrowRight className={`h-3 w-3 ${isSelected ? "text-[#2a21d2]" : "text-[#747878]"}`} />
               </div>
             </div>
           );
@@ -203,52 +216,52 @@ export default function SimulatorPage() {
       </div>
 
       {/* Simulation Execution Console */}
-      <Card className="border-zinc-800 bg-zinc-950/80 shadow-2xl">
-        <CardHeader className="p-4 border-b border-zinc-800 flex flex-row items-center justify-between">
+      <div className="border border-[#e9ecef] bg-white rounded-lg shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-[#e9ecef] flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <FlaskConical className="h-4 w-4 text-rose-400" />
-            <CardTitle className="text-base font-bold text-zinc-100">
+            <FlaskConical className="h-4 w-4 text-[#2a21d2]" />
+            <h3 className="text-base font-bold text-[#191c1d]">
               Live Resilience Execution Log
-            </CardTitle>
+            </h3>
           </div>
           {result && (
             <div className="flex items-center gap-2 font-mono text-xs">
-              <Badge variant="success" className="gap-1 font-bold text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 <span>{result.outcome.replace("_", " ")}</span>
-              </Badge>
-              <Badge variant="outline" className="text-[11px] text-zinc-400 border-zinc-800">
-                <Clock className="h-3 w-3 mr-1" />
+              </span>
+              <span className="text-[11px] text-[#747878] font-mono flex items-center gap-1">
+                <Clock className="h-3 w-3" />
                 <span>{result.executionTimeMs}ms</span>
-              </Badge>
+              </span>
             </div>
           )}
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-5 space-y-5">
+        <div className="p-5 space-y-5">
           {!result ? (
-            <div className="p-12 text-center text-xs text-zinc-500 font-mono">
+            <div className="p-12 text-center text-xs text-[#747878] font-mono">
               Select a fault scenario above or click &quot;Execute Selected Scenario&quot; to run live chaos test.
             </div>
           ) : (
             <>
               {/* Header Overview Banner */}
-              <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2">
+              <div className="p-4 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <h3 className="text-sm font-bold text-white">{result.title}</h3>
-                  <div className="text-xs font-mono text-indigo-400 flex items-center gap-1">
+                  <h3 className="text-sm font-bold text-[#191c1d]">{result.title}</h3>
+                  <div className="text-xs font-mono text-[#2a21d2] flex items-center gap-1 font-semibold">
                     <ShieldCheck className="h-3.5 w-3.5" />
                     <span>Defense: <strong>{result.defenseMechanism}</strong></span>
                   </div>
                 </div>
-                <p className="text-xs text-zinc-300 leading-relaxed">
+                <p className="text-xs text-[#444748] leading-relaxed">
                   {result.summary}
                 </p>
               </div>
 
               {/* Step by Step Breakdown */}
               <div className="space-y-2">
-                <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                <div className="text-xs font-bold text-[#444748] uppercase tracking-wider">
                   Execution Trace &amp; Security Guards
                 </div>
 
@@ -256,15 +269,15 @@ export default function SimulatorPage() {
                   {result.steps.map((step) => (
                     <div
                       key={step.step}
-                      className="p-3 rounded-xl bg-zinc-900/40 border border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-6 w-6 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[11px] font-bold text-zinc-200 shrink-0">
+                        <div className="h-6 w-6 rounded bg-white border border-[#c4c7c7] flex items-center justify-center text-[11px] font-bold text-[#191c1d] shrink-0">
                           {step.step}
                         </div>
                         <div>
-                          <div className="font-semibold text-zinc-200">{step.name}</div>
-                          <div className="text-zinc-400 text-[11px] font-sans">{step.details}</div>
+                          <div className="font-semibold text-[#191c1d]">{step.name}</div>
+                          <div className="text-[#444748] text-[11px] font-sans">{step.details}</div>
                         </div>
                       </div>
                       <div className="shrink-0">
@@ -276,21 +289,22 @@ export default function SimulatorPage() {
               </div>
 
               {/* Invariance Check Card */}
-              <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-300">
+              <div className="p-3.5 rounded-lg bg-[#087343]/5 border border-[#087343]/20 flex items-center justify-between text-xs text-[#087343]">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="h-4 w-4 text-[#087343] shrink-0" />
                   <span>
                     <strong>Ledger Invariant Verification:</strong> Immutable double-entry financial ledger verified with 0 corruption or double debits.
                   </span>
                 </div>
-                <Badge variant="outline" className="text-emerald-400 border-emerald-500/40 text-[10px]">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20">
                   PASS
-                </Badge>
+                </span>
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
+

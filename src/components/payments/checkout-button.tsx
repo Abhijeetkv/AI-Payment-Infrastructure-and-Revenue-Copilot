@@ -79,7 +79,7 @@ export function CheckoutButton({
         description,
         order_id: razorpayOrderId,
         theme: {
-          color: "#4f46e5",
+          color: "#2a21d2",
         },
         handler: async function (response: {
           razorpay_payment_id: string;
@@ -155,7 +155,7 @@ export function CheckoutButton({
         onClick={handleCheckout}
         disabled={loading}
         size={size}
-        className={className || "bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-medium shadow-sm"}
+        className={className || "bg-[#2a21d2] hover:bg-[#2a21d2]/90 text-white gap-2 font-medium shadow-sm cursor-pointer"}
       >
         {loading || status === "verifying" ? (
           <>

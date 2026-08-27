@@ -17,15 +17,16 @@ export function ChartContainer({
   ...props
 }: ChartContainerProps) {
   return (
-    <Card className={cn("overflow-hidden", className)} {...props}>
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
+    <Card className={cn("overflow-hidden border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900/90 shadow-sm", className)} {...props}>
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4">
         <div>
-          <CardTitle>{title}</CardTitle>
-          {description && <CardDescription className="mt-1">{description}</CardDescription>}
+          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</CardTitle>
+          {description && <CardDescription className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</CardDescription>}
         </div>
-        {action && <div>{action}</div>}
+        {action && <div className="shrink-0">{action}</div>}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="pt-2">{children}</CardContent>
     </Card>
   );
 }
+

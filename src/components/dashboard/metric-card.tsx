@@ -62,8 +62,8 @@ export function MetricCard({
                   change.trend === "up"
                     ? "text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/50"
                     : change.trend === "down"
-                    ? "text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/50"
-                    : "text-zinc-600 bg-zinc-100 dark:text-zinc-400 dark:bg-zinc-800"
+                      ? "text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/50"
+                      : "text-zinc-600 bg-zinc-100 dark:text-zinc-400 dark:bg-zinc-800"
                 )}
               >
                 {change.trend === "up" && <TrendingUp className="h-3 w-3" />}

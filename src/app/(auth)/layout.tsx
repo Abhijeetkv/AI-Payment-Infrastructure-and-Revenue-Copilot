@@ -1,4 +1,4 @@
-import { ShieldCheck } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 
 export default function AuthLayout({
   children,
@@ -6,22 +6,18 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Subtle background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/3 w-[300px] h-[300px] bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Header Branding */}
-      <div className="flex items-center gap-3 mb-8 z-10">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-          <ShieldCheck className="h-6 w-6 text-white" />
+    <div className="min-h-screen bg-[#f8f9fa] flex flex-col items-center justify-center p-4 relative font-sans text-zinc-900">
+      {/* Brand Header */}
+      <div className="flex items-center gap-3 mb-8 z-10 select-none">
+        <div className="h-9 w-9 rounded-lg bg-zinc-900 flex items-center justify-center text-white shadow-sm">
+          <LayoutGrid className="h-5 w-5" />
         </div>
         <div>
-          <span className="font-bold text-lg tracking-tight text-white block">
-            Revenue Copilot
+          <span className="font-bold text-base tracking-tight text-zinc-900 block leading-tight">
+            Payment Copilot
           </span>
-          <span className="text-[11px] font-mono text-zinc-400 block tracking-wider uppercase">
-            Payment Infrastructure Platform
+          <span className="text-[11px] font-medium text-zinc-500 block">
+            Enterprise Workspace
           </span>
         </div>
       </div>

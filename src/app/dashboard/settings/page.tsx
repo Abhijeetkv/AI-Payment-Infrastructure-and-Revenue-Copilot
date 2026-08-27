@@ -11,11 +11,8 @@ import {
   CheckCircle2,
   RefreshCw,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 interface TelemetryStats {
   orders: number;
@@ -100,18 +97,16 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Top Banner Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#e9ecef] pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Settings &amp; Infrastructure Operations
-            </h1>
-            <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
-              Phase 10 Active
-            </Badge>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#191c1d]">
+              Settings &amp; Infrastructure
+            </h2>
+            <Badge variant="success">Merchant Console</Badge>
           </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Manage merchant credentials, view live database telemetry stats, and seed 90-day demo datasets.
+          <p className="text-sm text-[#444748] mt-1 font-normal">
+            Manage merchant credentials, view database telemetry stats, and seed 90-day demo datasets.
           </p>
         </div>
 
@@ -120,77 +115,77 @@ export default function SettingsPage() {
           size="sm"
           onClick={fetchStats}
           disabled={loadingStats}
-          className="h-8 gap-1.5 text-xs text-zinc-300 border-zinc-800 hover:text-white"
+          className="h-9 gap-1.5 text-xs text-[#191c1d] bg-white border-[#c4c7c7] hover:bg-[#f3f4f5] shadow-xs cursor-pointer"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loadingStats ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loadingStats ? "animate-spin text-[#2a21d2]" : ""}`} />
           <span>Refresh Telemetry</span>
         </Button>
       </div>
 
       {successMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+        <div className="p-3.5 rounded-lg bg-[#087343]/10 border border-[#087343]/30 text-[#087343] text-xs flex items-center gap-2 animate-in fade-in font-medium">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[#087343]" />
           <span>{successMessage}</span>
         </div>
       )}
 
       {/* Demo Telemetry & High-Volume Seed Card */}
-      <Card className="border-zinc-800 bg-zinc-900/40 shadow-xl">
-        <CardHeader className="p-5 border-b border-zinc-800 flex flex-row items-center justify-between">
+      <div className="border border-[#e9ecef] bg-white rounded-lg shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-[#e9ecef] flex flex-row items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-indigo-400" />
-              <CardTitle className="text-base font-bold text-zinc-100">
+              <Database className="h-4 w-4 text-[#2a21d2]" />
+              <h3 className="text-base font-bold text-[#191c1d]">
                 High-Volume Seed Generator &amp; Telemetry Database
-              </CardTitle>
+              </h3>
             </div>
-            <CardDescription className="text-xs text-zinc-400">
+            <p className="text-xs text-[#444748]">
               Populate 90 days of continuous orders, payments, double-entry ledgers, and historical rollups.
-            </CardDescription>
+            </p>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-5 space-y-5">
+        <div className="p-5 space-y-5">
           {/* Telemetry Counter Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1">
-              <div className="text-[11px] text-zinc-400">Orders</div>
-              <div className="text-lg font-bold font-mono text-white">
+            <div className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1">
+              <div className="text-[11px] text-[#444748] font-medium">Orders</div>
+              <div className="text-lg font-bold font-mono text-[#191c1d]">
                 {stats ? stats.orders.toLocaleString() : "..."}
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1">
-              <div className="text-[11px] text-zinc-400">Payments</div>
-              <div className="text-lg font-bold font-mono text-emerald-400">
+            <div className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1">
+              <div className="text-[11px] text-[#444748] font-medium">Payments</div>
+              <div className="text-lg font-bold font-mono text-[#087343]">
                 {stats ? stats.payments.toLocaleString() : "..."}
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1">
-              <div className="text-[11px] text-zinc-400">Ledger Entries</div>
-              <div className="text-lg font-bold font-mono text-indigo-400">
+            <div className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1">
+              <div className="text-[11px] text-[#444748] font-medium">Ledger Entries</div>
+              <div className="text-lg font-bold font-mono text-[#2a21d2]">
                 {stats ? stats.transactions.toLocaleString() : "..."}
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1">
-              <div className="text-[11px] text-zinc-400">Refunds</div>
-              <div className="text-lg font-bold font-mono text-rose-400">
+            <div className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1">
+              <div className="text-[11px] text-[#444748] font-medium">Refunds</div>
+              <div className="text-lg font-bold font-mono text-[#c92a2a]">
                 {stats ? stats.refunds.toLocaleString() : "..."}
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1">
-              <div className="text-[11px] text-zinc-400">Anomalies</div>
-              <div className="text-lg font-bold font-mono text-amber-400">
+            <div className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1">
+              <div className="text-[11px] text-[#444748] font-medium">Anomalies</div>
+              <div className="text-lg font-bold font-mono text-[#b45309]">
                 {stats ? stats.anomalies.toLocaleString() : "..."}
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1">
-              <div className="text-[11px] text-zinc-400">Daily Rollups</div>
-              <div className="text-lg font-bold font-mono text-zinc-300">
+            <div className="p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1">
+              <div className="text-[11px] text-[#444748] font-medium">Daily Rollups</div>
+              <div className="text-lg font-bold font-mono text-[#191c1d]">
                 {stats ? stats.dailyMetrics.toLocaleString() : "..."}
               </div>
             </div>
@@ -198,9 +193,9 @@ export default function SettingsPage() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="text-xs text-zinc-400 flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-              <span>Generates ~180 realistic transactions across UPI (60%), Card (25%), and Netbanking (10%).</span>
+            <div className="text-xs text-[#444748] flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-[#2a21d2]" />
+              <span>Generates realistic transactions across UPI (60%), Card (25%), and Netbanking (10%).</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -209,7 +204,7 @@ export default function SettingsPage() {
                 size="sm"
                 onClick={handleClearData}
                 disabled={clearing || seeding}
-                className="text-xs text-rose-400 border-rose-900/50 hover:bg-rose-950/30 gap-1.5"
+                className="text-xs text-[#c92a2a] border-[#c92a2a]/30 hover:bg-[#c92a2a]/10 gap-1.5 cursor-pointer"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>{clearing ? "Clearing..." : "Reset Telemetry"}</span>
@@ -219,149 +214,156 @@ export default function SettingsPage() {
                 size="sm"
                 onClick={handleSeedData}
                 disabled={seeding || clearing}
-                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium gap-1.5 shadow-md shadow-indigo-950/30"
+                className="text-xs bg-[#2a21d2] hover:bg-[#2a21d2]/90 text-white font-semibold gap-1.5 shadow-xs cursor-pointer"
               >
                 <Sparkles className={`h-3.5 w-3.5 ${seeding ? "animate-spin" : ""}`} />
-                <span>{seeding ? "Generating 90-Day Telemetry..." : "Seed 90-Day High-Volume Telemetry"}</span>
+                <span>{seeding ? "Generating 90-Day Telemetry..." : "Seed 90-Day Telemetry"}</span>
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Grid: Credentials & AI Config */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Razorpay Gateway Card */}
-        <Card className="border-zinc-800 bg-zinc-900/40">
-          <CardHeader className="p-5 border-b border-zinc-800">
+        <div className="border border-[#e9ecef] bg-white rounded-lg shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-[#e9ecef]">
             <div className="flex items-center gap-2">
-              <Key className="h-4 w-4 text-indigo-400" />
-              <CardTitle className="text-base font-bold text-zinc-100">Razorpay Test Gateway</CardTitle>
+              <Key className="h-4 w-4 text-[#2a21d2]" />
+              <h3 className="text-base font-bold text-[#191c1d]">Razorpay Test Gateway</h3>
             </div>
-            <CardDescription className="text-xs text-zinc-400">
+            <p className="text-xs text-[#444748] mt-1">
               Test mode credentials used for orders, captures, refunds, and webhooks.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-5 space-y-4 text-xs">
+            </p>
+          </div>
+          <div className="p-5 space-y-4 text-xs">
             <div className="space-y-1.5">
-              <Label htmlFor="key-id" className="text-zinc-300">Key ID</Label>
-              <Input
+              <label htmlFor="key-id" className="font-semibold text-[#444748]">Key ID</label>
+              <input
                 id="key-id"
                 defaultValue="rzp_test_••••••••••••"
                 readOnly
-                className="font-mono text-xs bg-zinc-900 border-zinc-800 text-zinc-300"
+                className="w-full px-3 py-1.5 font-mono text-xs rounded-md bg-[#f8f9fa] border border-[#e9ecef] text-[#191c1d]"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="webhook-secret" className="text-zinc-300">Webhook Secret</Label>
-              <Input
+              <label htmlFor="webhook-secret" className="font-semibold text-[#444748]">Webhook Secret</label>
+              <input
                 id="webhook-secret"
                 defaultValue="••••••••••••••••••••••••"
                 readOnly
                 type="password"
-                className="font-mono text-xs bg-zinc-900 border-zinc-800 text-zinc-300"
+                className="w-full px-3 py-1.5 font-mono text-xs rounded-md bg-[#f8f9fa] border border-[#e9ecef] text-[#191c1d]"
               />
             </div>
             <div className="pt-2 flex items-center justify-between text-xs font-mono">
-              <span className="text-zinc-400">Enforcement Mode:</span>
-              <Badge variant="success" className="text-[10px]">Test Mode Enforced</Badge>
+              <span className="text-[#444748]">Enforcement Mode:</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20">
+                Test Mode Enforced
+              </span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* AI Copilot & Provider Card */}
-        <Card className="border-zinc-800 bg-zinc-900/40">
-          <CardHeader className="p-5 border-b border-zinc-800">
+        <div className="border border-[#e9ecef] bg-white rounded-lg shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-[#e9ecef]">
             <div className="flex items-center gap-2">
-              <Bot className="h-4 w-4 text-purple-400" />
-              <CardTitle className="text-base font-bold text-zinc-100">AI Intelligence Engine</CardTitle>
+              <Bot className="h-4 w-4 text-[#2a21d2]" />
+              <h3 className="text-base font-bold text-[#191c1d]">AI Intelligence Engine</h3>
             </div>
-            <CardDescription className="text-xs text-zinc-400">
-              Multi-provider natural-language financial intelligence.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-5 space-y-3.5 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+            <p className="text-xs text-[#444748] mt-1">
+              Natural-language payment intelligence and grounded tool-calling.
+            </p>
+          </div>
+          <div className="p-5 space-y-3.5 text-xs">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef]">
               <div className="space-y-0.5">
-                <div className="font-semibold text-zinc-200">AI Provider</div>
-                <div className="text-[11px] text-zinc-400">Google Gemini / OpenAI / Deterministic Engine</div>
+                <div className="font-semibold text-[#191c1d]">AI Provider</div>
+                <div className="text-[11px] text-[#444748]">Google Gemini 2.5 Flash / Tool Calling Engine</div>
               </div>
-              <Badge variant="outline" className="text-purple-400 border-purple-500/30 text-[10px] font-mono">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f0f0ff] text-[#2a21d2] border border-[#2a21d2]/20 font-mono">
                 Multi-Model
-              </Badge>
+              </span>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef]">
               <div className="space-y-0.5">
-                <div className="font-semibold text-zinc-200">Grounded DB Tool-Calling</div>
-                <div className="text-[11px] text-zinc-400">Zero financial hallucination guarantee</div>
+                <div className="font-semibold text-[#191c1d]">Grounded DB Tool-Calling</div>
+                <div className="text-[11px] text-[#444748]">Zero financial hallucination guarantee</div>
               </div>
-              <Badge variant="success" className="text-[10px]">Active</Badge>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20">
+                Active
+              </span>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#f8f9fa] border border-[#e9ecef]">
               <div className="space-y-0.5">
-                <div className="font-semibold text-zinc-200">Conversation Memory</div>
-                <div className="text-[11px] text-zinc-400">PostgreSQL thread persistence</div>
+                <div className="font-semibold text-[#191c1d]">Conversation Memory</div>
+                <div className="text-[11px] text-[#444748]">PostgreSQL thread persistence</div>
               </div>
-              <Badge variant="success" className="text-[10px]">Enabled</Badge>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343] border border-[#087343]/20">
+                Enabled
+              </span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Security & Reliability Invariants Card */}
-      <Card className="border-zinc-800 bg-zinc-900/40">
-        <CardHeader className="p-5 border-b border-zinc-800">
+      <div className="border border-[#e9ecef] bg-white rounded-lg shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-[#e9ecef]">
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-emerald-400" />
-            <CardTitle className="text-base font-bold text-zinc-100">Production Security &amp; Safety Guardrails</CardTitle>
+            <Shield className="h-4 w-4 text-[#087343]" />
+            <h3 className="text-base font-bold text-[#191c1d]">Production Security &amp; Safety Guardrails</h3>
           </div>
-        </CardHeader>
-        <CardContent className="p-5">
+        </div>
+        <div className="p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1.5">
+            <div className="p-3.5 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-zinc-200">Live Key Guard</span>
-                <Badge variant="success" className="text-[10px]">Enforced</Badge>
+                <span className="font-semibold text-[#191c1d]">Live Key Guard</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343]">Enforced</span>
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[#444748]">
                 Throws fatal error on startup if rzp_live_* keys are detected.
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1.5">
+            <div className="p-3.5 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-zinc-200">HMAC Webhooks</span>
-                <Badge variant="success" className="text-[10px]">Strict</Badge>
+                <span className="font-semibold text-[#191c1d]">HMAC Webhooks</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343]">Strict</span>
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[#444748]">
                 Cryptographic HMAC-SHA256 signature check rejects spoofed webhooks.
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1.5">
+            <div className="p-3.5 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-zinc-200">Double-Entry Ledger</span>
-                <Badge variant="success" className="text-[10px]">Immutable</Badge>
+                <span className="font-semibold text-[#191c1d]">Double-Entry Ledger</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343]">Immutable</span>
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[#444748]">
                 CREDIT on capture, DEBIT on refund; zero unverified balance shifts.
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1.5">
+            <div className="p-3.5 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-zinc-200">Idempotency</span>
-                <Badge variant="success" className="text-[10px]">Multi-Tier</Badge>
+                <span className="font-semibold text-[#191c1d]">Idempotency</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#087343]/10 text-[#087343]">Multi-Tier</span>
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[#444748]">
                 Redis distributed locks &amp; DB records prevent double-debits.
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
+
