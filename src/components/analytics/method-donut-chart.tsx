@@ -25,13 +25,13 @@ interface MethodDonutChartProps {
 }
 
 const COLORS = [
-  "#6366f1", // Indigo
-  "#10b981", // Emerald
-  "#8b5cf6", // Violet
+  "#2a21d2", // AI Accent Cobalt
+  "#087343", // Success Green
+  "#000000", // Dark Primary
+  "#5e5e5e", // Secondary Slate
   "#f59e0b", // Amber
-  "#06b6d4", // Cyan
-  "#ec4899", // Pink
-  "#71717a", // Zinc
+  "#0284c7", // Sky
+  "#c4c7c7", // Outline Variant
 ];
 
 interface CustomTooltipProps {
@@ -47,27 +47,27 @@ function CustomTooltip({ active, payload, currency = "INR" }: CustomTooltipProps
   const item = payload[0].payload;
 
   return (
-    <div className="rounded-xl bg-zinc-950/95 border border-zinc-800 p-3 shadow-2xl backdrop-blur-md space-y-1.5 text-xs font-mono">
-      <div className="font-bold text-white uppercase tracking-wider">
+    <div className="rounded-lg bg-white border border-[#e9ecef] p-3 shadow-md space-y-1.5 text-xs font-mono">
+      <div className="font-bold text-[#191c1d] uppercase tracking-wider font-sans">
         {item.method}
       </div>
-      <div className="flex justify-between gap-4 text-zinc-300">
-        <span className="text-zinc-400">Volume:</span>
-        <span className="font-semibold text-emerald-400">
+      <div className="flex justify-between gap-4 text-[#444748]">
+        <span>Volume:</span>
+        <span className="font-semibold text-[#087343]">
           {formatCurrency(item.volume, currency)}
         </span>
       </div>
-      <div className="flex justify-between gap-4 text-zinc-300">
-        <span className="text-zinc-400">Transactions:</span>
-        <span>{item.count}</span>
+      <div className="flex justify-between gap-4 text-[#444748]">
+        <span>Transactions:</span>
+        <span className="text-[#191c1d] font-semibold">{item.count}</span>
       </div>
-      <div className="flex justify-between gap-4 text-zinc-300">
-        <span className="text-zinc-400">Share:</span>
-        <span>{item.percentageShare}%</span>
+      <div className="flex justify-between gap-4 text-[#444748]">
+        <span>Share:</span>
+        <span className="text-[#191c1d] font-semibold">{item.percentageShare}%</span>
       </div>
-      <div className="flex justify-between gap-4 text-zinc-300">
-        <span className="text-zinc-400">Success Rate:</span>
-        <span className="text-indigo-300">{item.successRate}%</span>
+      <div className="flex justify-between gap-4 text-[#444748]">
+        <span>Success Rate:</span>
+        <span className="text-[#2a21d2] font-semibold">{item.successRate}%</span>
       </div>
     </div>
   );
@@ -81,7 +81,7 @@ export function MethodDonutChart({
   if (!data || data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-xs text-zinc-500 font-mono"
+        className="flex items-center justify-center text-xs text-[#747878] font-mono"
         style={{ height }}
       >
         No payment method data available
@@ -103,7 +103,7 @@ export function MethodDonutChart({
             innerRadius="58%"
             outerRadius="82%"
             paddingAngle={3}
-            stroke="#18181b"
+            stroke="#ffffff"
             strokeWidth={2}
           >
             {data.map((_entry, index) => (
@@ -118,3 +118,4 @@ export function MethodDonutChart({
     </div>
   );
 }
+

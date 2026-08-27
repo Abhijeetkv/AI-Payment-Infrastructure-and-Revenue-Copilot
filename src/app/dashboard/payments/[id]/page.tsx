@@ -322,9 +322,8 @@ export default function PaymentDetailPage() {
                     </div>
                     <div className="text-right">
                       <div
-                        className={`text-sm font-bold font-mono ${
-                          tx.direction === "CREDIT" ? "text-emerald-400" : "text-rose-400"
-                        }`}
+                        className={`text-sm font-bold font-mono ${tx.direction === "CREDIT" ? "text-emerald-400" : "text-rose-400"
+                          }`}
                       >
                         {tx.direction === "CREDIT" ? "+" : "-"}
                         {formatCurrency(tx.amount, tx.currency)}

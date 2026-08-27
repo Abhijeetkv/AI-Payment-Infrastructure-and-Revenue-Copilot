@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, Loader2, ArrowRight } from "lucide-react";
+import { Lock, Mail, Loader2, ArrowRight, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,8 @@ import { signIn } from "@/lib/auth/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  const [email, setEmail] = React.useState("merchant@example.com");
+  const [password, setPassword] = React.useState("password123");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -42,30 +42,30 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/90 text-white shadow-2xl backdrop-blur-xl">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-xl font-bold tracking-tight text-white">
-          Sign In to Dashboard
+    <Card className="border-zinc-200/80 bg-white text-zinc-900 shadow-sm rounded-xl">
+      <CardHeader className="space-y-1 p-6 border-b border-zinc-100">
+        <CardTitle className="text-xl font-bold tracking-tight text-zinc-900">
+          Sign In to Workspace
         </CardTitle>
-        <CardDescription className="text-zinc-400">
-          Enter your merchant credentials to access payment ops & copilot.
+        <CardDescription className="text-xs text-zinc-500">
+          Enter your merchant credentials to access payment infrastructure &amp; copilot.
         </CardDescription>
       </CardHeader>
 
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-6">
           {error && (
-            <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
               {error}
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-zinc-300">
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-xs font-semibold text-zinc-700">
               Email address
             </Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="email"
                 type="email"
@@ -73,19 +73,19 @@ export default function LoginPage() {
                 placeholder="merchant@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-9 bg-zinc-950 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                className="pl-8 bg-zinc-50/70 border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-1 focus-visible:ring-zinc-400"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-zinc-300">
+              <Label htmlFor="password" className="text-xs font-semibold text-zinc-700">
                 Password
               </Label>
             </div>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="password"
                 type="password"
@@ -93,7 +93,7 @@ export default function LoginPage() {
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="pl-9 bg-zinc-950 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                className="pl-8 bg-zinc-50/70 border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-1 focus-visible:ring-zinc-400"
               />
             </div>
           </div>
@@ -101,14 +101,14 @@ export default function LoginPage() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-medium"
+            className="w-full bg-[#2a21d2] hover:bg-[#2a21d2]/90 text-white gap-2 font-semibold text-xs h-9 shadow-xs cursor-pointer"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <span>Sign In</span>
-                <ArrowRight className="h-4 w-4" />
+                <span>Sign In with Credentials</span>
+                <ArrowRight className="h-3.5 w-3.5" />
               </>
             )}
           </Button>
@@ -119,19 +119,20 @@ export default function LoginPage() {
               type="button"
               variant="outline"
               onClick={() => router.push("/dashboard")}
-              className="w-full border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800 text-zinc-300 text-xs"
+              className="w-full border-[#c7c4d8] bg-[#f8f9fa] hover:bg-[#f3f4f5] text-[#191c1d] text-xs font-semibold h-9 gap-1.5 shadow-xs cursor-pointer"
             >
-              Skip to Dashboard (Demo Mode)
+              <Sparkles className="h-3.5 w-3.5 text-[#2a21d2]" />
+              <span>Instant Demo Login (No Password Required)</span>
             </Button>
           </div>
         </CardContent>
 
-        <CardFooter className="flex justify-center border-t border-zinc-800/80 pt-4">
-          <p className="text-xs text-zinc-400">
+        <CardFooter className="flex justify-center border-t border-[#e9ecef] p-4 bg-[#f8f9fa]">
+          <p className="text-xs text-[#464555]">
             Don&apos;t have an account?{" "}
             <Link
               href="/register"
-              className="text-indigo-400 font-medium hover:underline"
+              className="text-[#2a21d2] font-semibold hover:underline"
             >
               Register merchant
             </Link>

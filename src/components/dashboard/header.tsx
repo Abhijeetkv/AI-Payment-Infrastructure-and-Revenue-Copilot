@@ -1,79 +1,97 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Bell, Search, PlusCircle, LogOut, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { signOut, useSession } from "@/lib/auth/client";
+import { Search, Bell, User } from "lucide-react";
+import { useSession } from "@/lib/auth/client";
 
 export function DashboardHeader() {
-  const router = useRouter();
   const { data: session } = useSession();
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.push("/login");
-    } catch {
-      router.push("/login");
-    }
-  };
+  const [mode, setMode] = React.useState<"live" | "test">("test");
 
   return (
-    <header className="h-16 border-b border-zinc-200/80 bg-white/80 dark:border-zinc-800/80 dark:bg-zinc-950/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30">
-      {/* Search Bar */}
-      <div className="flex items-center gap-3 w-72">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <input
-            type="text"
-            placeholder="Search payments, orders, refunds..."
-            className="w-full pl-9 pr-4 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
-          />
+    <header className="h-16 sticky top-0 z-40 w-full bg-[#f8f9fa] border-b border-[#c7c4d8] flex items-center justify-between px-6 select-none">
+      {/* Left Brand and Navigation Links */}
+      <div className="flex items-center gap-6">
+        <Link href="/dashboard" className="text-lg font-bold text-[#2a21d2]">
+          FintechOS
+        </Link>
+        <div className="hidden sm:flex items-center gap-4 text-xs font-normal text-[#464555]">
+          <a
+            href="https://razorpay.com/docs"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-[#2a21d2] transition-colors"
+          >
+            Docs
+          </a>
+          <a
+            href="https://support.razorpay.com"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-[#2a21d2] transition-colors"
+          >
+            Help
+          </a>
+          <Link href="/dashboard/webhooks" className="hover:text-[#2a21d2] transition-colors">
+            API
+          </Link>
         </div>
       </div>
 
-      {/* Right Actions */}
+      {/* Right Controls */}
       <div className="flex items-center gap-3">
-        <Link href="/dashboard/orders">
-          <Button size="sm" className="gap-2 shadow-sm font-medium">
-            <PlusCircle className="h-4 w-4" />
-            <span>Create Order</span>
-          </Button>
-        </Link>
+        {/* Search Bar */}
+        <div className="relative w-48 sm:w-64">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#777587]" />
+          <input
+            type="text"
+            placeholder="Search..."
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#c7c4d8] bg-white text-[#191c1d] focus:border-[#2a21d2] focus:outline-none focus:ring-1 focus:ring-[#2a21d2]/20 transition-all placeholder:text-[#777587]"
+          />
+        </div>
 
+        {/* Mode Toggles */}
         <button
-          title="Notifications"
-          className="relative p-2 rounded-lg text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          type="button"
+          onClick={() => setMode("live")}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+            mode === "live"
+              ? "bg-[#e1e3e4] text-[#191c1d] font-semibold border-b-2 border-[#2a21d2]"
+              : "border-[#c7c4d8] text-[#191c1d] hover:bg-[#f3f4f5]"
+          }`}
         >
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-indigo-600" />
+          Live Mode
         </button>
 
-        <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800 mx-1" />
+        <button
+          type="button"
+          onClick={() => setMode("test")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            mode === "test"
+              ? "bg-[#e1e3e4] text-[#191c1d] font-semibold border-b-2 border-[#2a21d2]"
+              : "border border-[#c7c4d8] text-[#191c1d] hover:bg-[#f3f4f5]"
+          }`}
+        >
+          Test Mode
+        </button>
 
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-semibold text-xs">
-            {session?.user?.name ? (
-              session.user.name.charAt(0).toUpperCase()
-            ) : (
-              <User className="h-4 w-4" />
-            )}
-          </div>
-          <div className="hidden md:block text-left">
-            <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
-              {session?.user?.name || "Merchant Admin"}
-            </div>
-            <div className="text-[10px] text-zinc-500 truncate max-w-[120px]">
-              {session?.user?.email || "admin@example.com"}
-            </div>
-          </div>
+        {/* Action Icons */}
+        <div className="flex items-center gap-1 ml-1 text-[#464555]">
           <button
-            onClick={handleSignOut}
-            title="Sign out"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors ml-1"
+            type="button"
+            title="Notifications"
+            className="p-1.5 rounded-lg hover:bg-[#f3f4f5] transition-colors relative cursor-pointer"
           >
-            <LogOut className="h-4 w-4" />
+            <Bell className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            title={session?.user?.name || "Account Profile"}
+            className="p-1.5 rounded-lg hover:bg-[#f3f4f5] transition-colors cursor-pointer flex items-center justify-center"
+          >
+            <User className="h-5 w-5" />
           </button>
         </div>
       </div>

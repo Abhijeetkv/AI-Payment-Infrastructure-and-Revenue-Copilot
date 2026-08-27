@@ -1,476 +1,270 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import {
-  AlertTriangle,
-  AlertCircle,
+  TrendingDown,
+  TrendingUp,
+  RotateCcw,
+  Bot,
+  Filter,
+  Download,
+  Clock,
   CheckCircle2,
-  RefreshCw,
-  ShieldCheck,
-  Zap,
-  Activity,
-  ArrowUpRight,
-  Sparkles,
-  Search,
 } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { MetricCard } from "@/components/dashboard/metric-card";
-import { ResolveDialog } from "@/components/anomalies/resolve-dialog";
 
-interface AnomalyItem {
+interface AnomalyCardData {
   id: string;
-  type: string;
-  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  metric: string;
-  currentValue: number;
-  baselineValue: number;
-  deviation: number;
-  description: string;
-  isResolved: boolean;
-  resolvedAt: string | null;
-  detectedAt: string;
+  type: "failure_spike" | "card_testing" | "refund_surge";
+  title: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  timeAgo: string;
+  whatHappened: string;
+  impactText: string;
+  impactColor?: string;
+  copilotAnalysis: string;
+  primaryActionLabel: string;
+  secondaryActionLabel?: string;
+  primaryActionStyle: "blue" | "gray";
 }
 
-interface AnomalySummary {
-  healthScore: number;
-  activeCount: number;
-  criticalCount: number;
-  highCount: number;
-  resolvedCount: number;
-  totalCount: number;
-  status: "HEALTHY" | "DEGRADED" | "CRITICAL_ATTENTION";
-}
+const mockAnomalies: AnomalyCardData[] = [
+  {
+    id: "anom_1",
+    type: "failure_spike",
+    title: "Unusual payment failure spike",
+    severity: "HIGH",
+    timeAgo: "12m ago",
+    whatHappened: "Failure rate across EU gateways spiked to 14.2% (baseline 1.8%).",
+    impactText: "₹18,400 at risk",
+    impactColor: "text-red-700 font-semibold font-mono",
+    copilotAnalysis:
+      "Pattern matches known timeouts from Acquirer Bank 'Stripe-EU-1'. Suggest immediate fallback routing.",
+    primaryActionLabel: "Route to Fallback",
+    secondaryActionLabel: "View Logs",
+    primaryActionStyle: "blue",
+  },
+  {
+    id: "anom_2",
+    type: "card_testing",
+    title: "Abnormal transaction pattern",
+    severity: "MEDIUM",
+    timeAgo: "1h ago",
+    whatHappened: "Multiple micro-transactions (₹1.00) originating from similar IP subnets.",
+    impactText: "High authorization volume",
+    impactColor: "text-[#191c1d] font-semibold font-mono",
+    copilotAnalysis:
+      "Potential card testing attack. 85% confidence. Recommend enforcing stricter rate limits on suspicious IP blocks.",
+    primaryActionLabel: "Apply Rate Limits",
+    secondaryActionLabel: "Dismiss",
+    primaryActionStyle: "gray",
+  },
+  {
+    id: "anom_3",
+    type: "refund_surge",
+    title: "Unexpected refund increase",
+    severity: "LOW",
+    timeAgo: "4h ago",
+    whatHappened: "Refund volume for 'Product Tier B' increased by 25% DoD.",
+    impactText: "Minor revenue variance",
+    impactColor: "text-[#191c1d] font-semibold font-mono",
+    copilotAnalysis:
+      "Likely correlates with a recent marketing campaign offering a trial period. No immediate technical intervention required.",
+    primaryActionLabel: "Acknowledge",
+    primaryActionStyle: "gray",
+  },
+];
 
 export default function AnomaliesPage() {
-  const [anomalies, setAnomalies] = React.useState<AnomalyItem[]>([]);
-  const [summary, setSummary] = React.useState<AnomalySummary | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [scanning, setScanning] = React.useState(false);
-  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "ACTIVE" | "CRITICAL" | "RESOLVED">("ACTIVE");
-  const [search, setSearch] = React.useState("");
-  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [anomalies] = React.useState<AnomalyCardData[]>(mockAnomalies);
+  const [resolvedIds, setResolvedIds] = React.useState<string[]>([]);
+  const [actionSuccessMsg, setActionSuccessMsg] = React.useState<string | null>(null);
 
-  // Resolution Dialog state
-  const [resolvingAnomaly, setResolvingAnomaly] = React.useState<AnomalyItem | null>(null);
-
-  React.useEffect(() => {
-    let isMounted = true;
-    const params = new URLSearchParams();
-    params.set("summary", "true");
-    params.set("limit", "50");
-
-    if (statusFilter === "ACTIVE") params.set("isResolved", "false");
-    else if (statusFilter === "RESOLVED") params.set("isResolved", "true");
-    else if (statusFilter === "CRITICAL") {
-      params.set("severity", "CRITICAL");
-      params.set("isResolved", "false");
-    }
-
-    fetch(`/api/anomalies?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (!isMounted) return;
-        if (json.success) {
-          setAnomalies(json.data || []);
-          if (json.summary) setSummary(json.summary);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load anomalies:", err);
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [statusFilter, refreshKey]);
-
-  const handleRefresh = () => {
-    setLoading(true);
-    setRefreshKey((k) => k + 1);
-  };
-
-  const handleTriggerScan = async () => {
-    try {
-      setScanning(true);
-      await fetch("/api/anomalies", { method: "POST" });
-      handleRefresh();
-    } catch (err) {
-      console.error("Failed to run anomaly scan:", err);
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const filteredAnomalies = React.useMemo(() => {
-    if (!search.trim()) return anomalies;
-    const q = search.toLowerCase();
-    return anomalies.filter(
-      (a) =>
-        a.type.toLowerCase().includes(q) ||
-        a.description.toLowerCase().includes(q) ||
-        a.metric.toLowerCase().includes(q) ||
-        a.id.toLowerCase().includes(q)
-    );
-  }, [anomalies, search]);
-
-  const getSeverityBadge = (sev: string) => {
-    switch (sev) {
-      case "CRITICAL":
-        return (
-          <Badge
-            variant="destructive"
-            className="gap-1 font-mono text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/40 animate-pulse"
-          >
-            <AlertCircle className="h-3 w-3" />
-            <span>CRITICAL</span>
-          </Badge>
-        );
-      case "HIGH":
-        return (
-          <Badge
-            variant="warning"
-            className="gap-1 font-mono text-[11px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/40"
-          >
-            <AlertTriangle className="h-3 w-3" />
-            <span>HIGH</span>
-          </Badge>
-        );
-      case "MEDIUM":
-        return (
-          <Badge
-            variant="default"
-            className="gap-1 font-mono text-[11px] bg-indigo-500/15 text-indigo-300 border border-indigo-500/40"
-          >
-            <Activity className="h-3 w-3" />
-            <span>MEDIUM</span>
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="outline" className="text-[11px] text-zinc-400">
-            LOW
-          </Badge>
-        );
-    }
+  const handleAction = (id: string, actionName: string) => {
+    setResolvedIds((prev) => [...prev, id]);
+    setActionSuccessMsg(`Action '${actionName}' executed successfully.`);
+    setTimeout(() => setActionSuccessMsg(null), 4000);
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Banner Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-[#e9ecef] pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Statistical Anomaly Detection
-            </h1>
-            <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
-              Phase 7 Active
-            </Badge>
-          </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            7-day rolling moving average baselines, z-score deviation scoring, and automated failure spike alerts.
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#191c1d]">
+            Detected Anomalies
+          </h2>
+          <p className="text-sm text-[#444748] mt-1 font-normal">
+            AI has identified 3 active irregularities requiring attention.
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="sm"
-            onClick={handleRefresh}
-            disabled={loading}
-            className="h-8 gap-1.5 text-xs text-zinc-300 border-zinc-800 hover:text-white"
+            className="h-9 gap-2 text-xs font-medium text-[#191c1d] bg-white border-[#c4c7c7] hover:bg-[#f3f4f5] shadow-xs cursor-pointer"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>Refresh</span>
+            <Filter className="h-4 w-4 text-[#444748]" />
+            <span>Filter</span>
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleTriggerScan}
-            disabled={scanning}
-            className="h-8 gap-1.5 text-xs bg-rose-600 hover:bg-rose-500 text-white font-medium shadow-md shadow-rose-950/30"
+            className="h-9 gap-2 text-xs font-medium text-[#191c1d] bg-white border-[#c4c7c7] hover:bg-[#f3f4f5] shadow-xs cursor-pointer"
           >
-            <Zap className={`h-3.5 w-3.5 ${scanning ? "animate-spin" : ""}`} />
-            <span>Run Telemetry Scan</span>
+            <Download className="h-4 w-4 text-[#444748]" />
+            <span>Export</span>
           </Button>
         </div>
       </div>
 
-      {/* Health Score & Summary Banner */}
-      {summary && (
-        <div
-          className={`p-5 rounded-2xl border transition-all ${
-            summary.status === "HEALTHY"
-              ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-100"
-              : summary.status === "DEGRADED"
-              ? "bg-amber-950/20 border-amber-500/30 text-amber-100"
-              : "bg-rose-950/30 border-rose-500/40 text-rose-100"
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div
-                className={`h-11 w-11 rounded-2xl flex items-center justify-center ${
-                  summary.status === "HEALTHY"
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : summary.status === "DEGRADED"
-                    ? "bg-amber-500/20 text-amber-400"
-                    : "bg-rose-500/20 text-rose-400"
-                }`}
-              >
-                {summary.status === "HEALTHY" ? (
-                  <ShieldCheck className="h-6 w-6" />
-                ) : (
-                  <AlertTriangle className="h-6 w-6" />
-                )}
-              </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-white">
-                    System Health: {summary.status.replace("_", " ")}
-                  </h3>
-                  <Badge
-                    variant={summary.status === "HEALTHY" ? "success" : "destructive"}
-                    className="text-[10px]"
-                  >
-                    Score {summary.healthScore}/100
-                  </Badge>
-                </div>
-                <p className="text-xs text-zinc-400">
-                  {summary.activeCount === 0
-                    ? "All gateway telemetry within normal 7-day statistical bounds (z < 1.4)."
-                    : `${summary.activeCount} open telemetry deviation(s) detected (${summary.criticalCount} Critical, ${summary.highCount} High).`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Link href="/dashboard/copilot?q=Analyze%20recent%20payment%20anomalies%20and%20failure%20spikes">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5 bg-zinc-900/80 border-zinc-700 text-indigo-300 hover:text-white"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Ask Copilot to Diagnose</span>
-                </Button>
-              </Link>
-            </div>
-          </div>
+      {actionSuccessMsg && (
+        <div className="p-3.5 rounded-lg bg-[#087343]/10 border border-[#087343]/20 text-[#087343] text-xs flex items-center gap-2 animate-in fade-in font-medium">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[#087343]" />
+          <span>{actionSuccessMsg}</span>
         </div>
       )}
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title="Active Anomalies"
-          value={summary ? String(summary.activeCount) : "0"}
-          icon={AlertTriangle}
-          variant={summary && summary.activeCount > 0 ? "danger" : "success"}
-          description="Awaiting resolution"
-        />
+      {/* 2-Column Grid of Anomaly Cards */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {anomalies.map((item) => {
+          const isResolved = resolvedIds.includes(item.id);
 
-        <MetricCard
-          title="Critical Severity"
-          value={summary ? String(summary.criticalCount) : "0"}
-          icon={AlertCircle}
-          variant="danger"
-          description="z-score ≥ 3.5 or fail ≥ 50%"
-        />
+          const severityClass =
+            item.severity === "HIGH"
+              ? "severity-high"
+              : item.severity === "MEDIUM"
+                ? "severity-medium"
+                : "severity-low";
 
-        <MetricCard
-          title="High Severity Alerts"
-          value={summary ? String(summary.highCount) : "0"}
-          icon={Activity}
-          variant="warning"
-          description="z-score ≥ 2.5 standard deviations"
-        />
+          return (
+            <div
+              key={item.id}
+              className={`rounded-xl border p-6 flex flex-col gap-4 shadow-sm hover:shadow-md transition-all duration-300 ${severityClass} ${
+                isResolved ? "opacity-60 bg-[#f8f9fa]" : "bg-white"
+              }`}
+            >
+              {/* Header: Icon + Title + Severity Badge + Time */}
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                  {/* Severity Icon Box */}
+                  {item.severity === "HIGH" && (
+                    <div className="w-10 h-10 rounded bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                      <TrendingDown className="h-5 w-5" />
+                    </div>
+                  )}
+                  {item.severity === "MEDIUM" && (
+                    <div className="w-10 h-10 rounded bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                      <TrendingUp className="h-5 w-5" />
+                    </div>
+                  )}
+                  {item.severity === "LOW" && (
+                    <div className="w-10 h-10 rounded bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                      <RotateCcw className="h-5 w-5" />
+                    </div>
+                  )}
 
-        <MetricCard
-          title="Resolved Incidents"
-          value={summary ? String(summary.resolvedCount) : "0"}
-          icon={CheckCircle2}
-          variant="indigo"
-          description="Mitigated or closed"
-        />
-      </div>
-
-      {/* Main Anomalies Card */}
-      <Card className="border-zinc-800 bg-zinc-900/40">
-        <CardHeader className="p-4 border-b border-zinc-800">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <Input
-                placeholder="Search by anomaly type, metric, or description..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 text-xs bg-zinc-900 border-zinc-800 text-zinc-100"
-              />
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
-              {(["ALL", "ACTIVE", "CRITICAL", "RESOLVED"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setStatusFilter(tab)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    statusFilter === tab
-                      ? "bg-zinc-800 text-white"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          {loading && anomalies.length === 0 ? (
-            <div className="p-16 text-center text-xs text-zinc-400">Loading anomalies telemetry...</div>
-          ) : filteredAnomalies.length === 0 ? (
-            <div className="p-16 text-center space-y-3">
-              <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-zinc-200">No anomalies detected</h3>
-                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                  All telemetry is operating within expected 7-day statistical bounds.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTriggerScan}
-                disabled={scanning}
-                className="text-xs gap-1.5 text-zinc-300"
-              >
-                <Zap className="h-3.5 w-3.5" />
-                <span>Run Test Scan</span>
-              </Button>
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-800/80">
-              {filteredAnomalies.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-5 hover:bg-zinc-800/30 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-                >
-                  <div className="space-y-2.5 max-w-2xl">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      {getSeverityBadge(item.severity)}
-
-                      <span className="font-bold text-sm text-zinc-100 uppercase tracking-wide">
-                        {item.type.replace("_", " ")}
-                      </span>
-
-                      {item.deviation !== 0 && (
-                        <span
-                          className={`font-mono text-xs px-2 py-0.5 rounded-full font-bold ${
-                            item.deviation > 0
-                              ? "bg-rose-950/60 text-rose-400 border border-rose-800/60"
-                              : "bg-amber-950/60 text-amber-400 border border-amber-800/60"
-                          }`}
-                        >
-                          {item.deviation > 0 ? `+${item.deviation}%` : `${item.deviation}%`} vs baseline
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#191c1d]">
+                      {item.title}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      {item.severity === "HIGH" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200 uppercase tracking-wider">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> HIGH
+                        </span>
+                      )}
+                      {item.severity === "MEDIUM" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 uppercase tracking-wider">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> MEDIUM
+                        </span>
+                      )}
+                      {item.severity === "LOW" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-wider">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> LOW
                         </span>
                       )}
 
-                      {item.isResolved && (
-                        <Badge variant="success" className="text-[10px]">
-                          RESOLVED
-                        </Badge>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-zinc-300 leading-relaxed">
-                      {item.description}
-                    </p>
-
-                    {/* Metric Comparison Tags */}
-                    <div className="flex flex-wrap items-center gap-4 text-xs font-mono pt-1">
-                      <div className="flex items-center gap-1.5 text-zinc-400">
-                        <span>Observed Value:</span>
-                        <span className="font-bold text-rose-400">{item.currentValue}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-zinc-400">
-                        <span>7D Baseline:</span>
-                        <span className="font-semibold text-zinc-300">{item.baselineValue}</span>
-                      </div>
-                      <div className="text-zinc-500 text-[11px]">
-                        Detected {new Date(item.detectedAt).toLocaleString("en-IN", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {!item.isResolved ? (
-                      <Button
-                        size="sm"
-                        onClick={() => setResolvingAnomaly(item)}
-                        className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>Resolve</span>
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-zinc-500 font-mono">
-                        Resolved {item.resolvedAt ? new Date(item.resolvedAt).toLocaleDateString() : ""}
+                      <span className="text-xs text-[#444748] flex items-center gap-1 font-normal">
+                        <Clock className="h-3.5 w-3.5 text-[#747878]" /> {item.timeAgo}
                       </span>
-                    )}
-
-                    <Link
-                      href={`/dashboard/copilot?q=Explain%20anomaly%20${item.type}%20detected%20on%20${item.metric}%20with%20deviation%20${item.deviation}%25`}
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs gap-1 text-indigo-400 border-indigo-500/30 hover:bg-indigo-950/30"
-                      >
-                        <span>Investigate</span>
-                        <ArrowUpRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </Link>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
 
-      {/* Resolve Incident Dialog */}
-      {resolvingAnomaly && (
-        <ResolveDialog
-          isOpen={!!resolvingAnomaly}
-          onClose={() => setResolvingAnomaly(null)}
-          anomalyId={resolvingAnomaly.id}
-          anomalyType={resolvingAnomaly.type}
-          severity={resolvingAnomaly.severity}
-          onResolveSuccess={() => {
-            handleRefresh();
-          }}
-        />
-      )}
+              {/* What Happened & Impact */}
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div>
+                  <p className="text-[11px] font-bold text-[#444748] uppercase tracking-wider mb-1">
+                    What Happened
+                  </p>
+                  <p className="text-sm text-[#191c1d] leading-relaxed">
+                    {item.whatHappened}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-[#444748] uppercase tracking-wider mb-1">
+                    Impact
+                  </p>
+                  <p className={`text-sm ${item.impactColor || "text-[#191c1d] font-semibold"}`}>
+                    {item.impactText}
+                  </p>
+                </div>
+              </div>
+
+              {/* AI Copilot Analysis Box */}
+              <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-4 mt-2 ai-glow">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bot className="h-4 w-4 text-blue-600" />
+                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
+                    AI Copilot Analysis
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {item.copilotAnalysis}
+                </p>
+              </div>
+
+              {/* Action Buttons Row */}
+              <div className="mt-auto pt-4 flex items-center gap-3">
+                {item.primaryActionStyle === "blue" ? (
+                  <button
+                    type="button"
+                    disabled={isResolved}
+                    onClick={() => handleAction(item.id, item.primaryActionLabel)}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold py-2.5 px-4 rounded transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    {item.primaryActionLabel}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isResolved}
+                    onClick={() => handleAction(item.id, item.primaryActionLabel)}
+                    className="flex-1 bg-[#e1e3e4] border border-[#c4c7c7] hover:bg-gray-300 disabled:opacity-50 text-[#191c1d] text-xs font-semibold py-2.5 px-4 rounded transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {item.primaryActionLabel}
+                  </button>
+                )}
+
+                {item.secondaryActionLabel && (
+                  <button
+                    type="button"
+                    disabled={isResolved}
+                    onClick={() => handleAction(item.id, item.secondaryActionLabel!)}
+                    className="px-4 py-2.5 border border-[#c4c7c7] text-[#191c1d] text-xs font-medium rounded hover:bg-[#edeeef] disabled:opacity-50 transition-colors bg-white cursor-pointer"
+                  >
+                    {item.secondaryActionLabel}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
