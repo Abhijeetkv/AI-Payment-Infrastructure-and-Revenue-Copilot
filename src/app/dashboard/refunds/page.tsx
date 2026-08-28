@@ -19,11 +19,8 @@ import {
   ChevronRight,
   ExternalLink,
 } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { MetricCard } from "@/components/dashboard/metric-card";
 import { formatCurrency } from "@/lib/utils";
 import { RefundDialog } from "@/components/payments/refund-dialog";
 

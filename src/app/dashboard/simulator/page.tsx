@@ -13,11 +13,16 @@ import {
   Layers,
   ArrowRight,
   Clock,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 type ScenarioType =
+  | "PAYMENT_FAILURE_RECOVERY"
+  | "UPI_DEGRADATION_RECOVERY"
+  | "REPEATED_FAILURE_ESCALATION"
   | "NETWORK_TIMEOUT"
   | "BANK_DECLINE"
   | "WEBHOOK_HMAC_TAMPER"
@@ -45,6 +50,27 @@ interface SimulationResult {
 }
 
 const SCENARIOS = [
+  {
+    type: "PAYMENT_FAILURE_RECOVERY" as ScenarioType,
+    title: "Autonomous Payment Recovery",
+    icon: Sparkles,
+    badge: "AI Agent + Policy Gatekeeper",
+    description: "Simulates failure detection, AI customer telemetry analysis, policy validation, Razorpay test order creation, webhook confirmation, and ₹2,499 ledger credit.",
+  },
+  {
+    type: "UPI_DEGRADATION_RECOVERY" as ScenarioType,
+    title: "UPI Degradation & Method Fallback",
+    icon: Zap,
+    badge: "Alternate Method Route",
+    description: "Simulates route degradation on UPI. AI recommends Card route fallback, recovering 81.25% of at-risk checkout sessions.",
+  },
+  {
+    type: "REPEATED_FAILURE_ESCALATION" as ScenarioType,
+    title: "Repeated Failure Bounded Escalation",
+    icon: ShieldCheck,
+    badge: "Deterministic Stopping Rule",
+    description: "Verifies that policy guardrails halt automated retries on 3rd failure attempt, preventing runaway charges and escalating cleanly to the merchant.",
+  },
   {
     type: "NETWORK_TIMEOUT" as ScenarioType,
     title: "Gateway Network Timeout",

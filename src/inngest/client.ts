@@ -56,9 +56,36 @@ export type Events = {
       merchantId: string;
     };
   };
+  // ─── Recovery Events ──────────────────────────
+  "recovery/case.created": {
+    data: {
+      recoveryCaseId: string;
+      merchantId: string;
+    };
+  };
+  "recovery/action.executed": {
+    data: {
+      recoveryCaseId: string;
+      actionId: string;
+      merchantId: string;
+    };
+  };
+  "recovery/retry.scheduled": {
+    data: {
+      recoveryCaseId: string;
+      merchantId: string;
+      delayMinutes: number;
+    };
+  };
+  "recovery/batch.started": {
+    data: {
+      merchantId: string;
+      batchId: string;
+    };
+  };
 };
 
 export const inngest = new Inngest({
-  id: "ai-payment-copilot",
+  id: "lumina-recovery-agent",
   eventKey: process.env.INNGEST_EVENT_KEY || "local",
 });

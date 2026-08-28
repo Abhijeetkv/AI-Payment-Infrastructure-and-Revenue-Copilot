@@ -6,7 +6,16 @@ type PrismaTransactionClient = Prisma.TransactionClient;
 
 export interface CreateAuditLogParams {
   merchantId: string;
-  entityType: "payment" | "order" | "refund" | "transaction" | "webhook" | "anomaly";
+  entityType:
+    | "payment"
+    | "order"
+    | "refund"
+    | "transaction"
+    | "webhook"
+    | "anomaly"
+    | "recovery_case"
+    | "recovery_action"
+    | "recovery_policy";
   entityId: string;
   action: string;
   changes?: Record<string, unknown>;

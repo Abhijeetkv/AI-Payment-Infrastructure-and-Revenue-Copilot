@@ -6,6 +6,11 @@ import { resolvePendingPayment } from "@/inngest/payment-resolution";
 import { processRefund } from "@/inngest/refund-processing";
 import { computeDailyMetricsCron } from "@/inngest/daily-analytics";
 import { detectAnomaliesCron } from "@/inngest/anomaly-detection";
+import {
+  processRecoveryCase,
+  processBatchRecovery,
+  expireStaleRecoveryCasesCron,
+} from "@/inngest/recovery";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -16,5 +21,8 @@ export const { GET, POST, PUT } = serve({
     processRefund,
     computeDailyMetricsCron,
     detectAnomaliesCron,
+    processRecoveryCase,
+    processBatchRecovery,
+    expireStaleRecoveryCasesCron,
   ],
 });

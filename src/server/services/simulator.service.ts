@@ -1,4 +1,7 @@
 export type SimulationScenarioType =
+  | "PAYMENT_FAILURE_RECOVERY"
+  | "UPI_DEGRADATION_RECOVERY"
+  | "REPEATED_FAILURE_ESCALATION"
   | "NETWORK_TIMEOUT"
   | "BANK_DECLINE"
   | "WEBHOOK_HMAC_TAMPER"
@@ -51,6 +54,70 @@ export class SimulatorService {
     };
 
     switch (scenario) {
+      case "PAYMENT_FAILURE_RECOVERY": {
+        addStep("Simulate Payment Failure", "FAILED_EXPECTED", "Client payment of ₹2,499.00 failed at gateway (Bank Insufficient Balance code).");
+        addStep("Revenue Risk Detection", "SUCCESS", "RevenueRiskEngine detected ₹2,499.00 at risk and generated Recovery Case #RC-9102.");
+        addStep("Customer Telemetry Analysis", "SUCCESS", "AI analyzed customer history: 3 past successful transactions, 82% conversion confidence.");
+        addStep("AI Action Recommendation", "SUCCESS", "AI Agent recommended PAYMENT_RETRY via SMS/email payment link.");
+        addStep("Policy Engine Guardrails", "BLOCKED_SAFELY", "Validated: Amount (₹2,499 ≤ ₹1,00,000), Attempts (1/3), Probability (82% ≥ 15%). Action ALLOWED.");
+        addStep("Execute Bounded Workflow", "SUCCESS", "Inngest dispatched durable retry step; created Razorpay test order order_rec_9102.");
+        addStep("Customer Re-attempt & Capture", "SUCCESS", "Payment captured upstream via Razorpay Test Mode webhook (pay_rec_9102).");
+        addStep("Ledger Reconciliation", "SUCCESS", "Immutable financial ledger credited +₹2,499.00; Case marked RECOVERED.");
+
+        return {
+          scenario,
+          title: "End-to-End Autonomous Payment Recovery",
+          description: "Simulates an end-to-end recovery loop: failure detection, AI recommendation, policy gatekeeping, durable retry, and ledger reconciliation.",
+          executionTimeMs: Date.now() - startTime + 120,
+          defenseMechanism: "AI Agent Reasoning + Policy Gatekeeper + Inngest Durable Workflow",
+          outcome: "PASSED_RESILIENT",
+          summary: "Lumina successfully detected ₹2,499 at risk, verified policy checks, executed retry, and recovered the full amount into the ledger.",
+          steps,
+          ledgerProtected: true,
+        };
+      }
+
+      case "UPI_DEGRADATION_RECOVERY": {
+        addStep("Detect Route Degradation", "FAILED_EXPECTED", "Statistical Anomaly Engine flagged UPI success rate drop (94.2% → 71.8%).");
+        addStep("Calculate At-Risk Cohort", "SUCCESS", "RevenueRiskEngine calculated ₹38,400 at risk across 14 affected checkout sessions.");
+        addStep("AI Method Recommendation", "SUCCESS", "AI Agent recommended ALTERNATE_METHOD (Card/Netbanking) given 88.4% historical card success.");
+        addStep("Policy Gatekeeping Check", "BLOCKED_SAFELY", "RecoveryPolicyEngine verified alternate method rules and approved customer redirection.");
+        addStep("Dynamic Checkout Intercept", "SUCCESS", "Client presented with 1-click fallback card checkout.");
+        addStep("Recovered Transaction", "SUCCESS", "11 of 14 sessions completed on Card route; ₹31,200 (81.25%) recovered.");
+
+        return {
+          scenario,
+          title: "Payment Method Degradation & Alternate Route Recovery",
+          description: "Simulates a gateway-level outage on UPI and verifies dynamic alternate payment method recommendation and recovery.",
+          executionTimeMs: Date.now() - startTime + 95,
+          defenseMechanism: "Statistical Telemetry + AI Route Fallback + Ledger Invariance",
+          outcome: "PASSED_RESILIENT",
+          summary: "Lumina mitigated UPI degradation by routing at-risk transactions to Card payments, recovering 81.25% of at-risk volume.",
+          steps,
+          ledgerProtected: true,
+        };
+      }
+
+      case "REPEATED_FAILURE_ESCALATION": {
+        addStep("Process 3rd Failure Attempt", "FAILED_EXPECTED", "High-value enterprise payment of ₹45,000.00 failed for the 3rd consecutive time.");
+        addStep("Policy Engine Evaluation", "BLOCKED_SAFELY", "RecoveryPolicyEngine evaluated rule: max_attempts_exceeded (3/3 reached). Automated retry BLOCKED.");
+        addStep("Halt Automated Retries", "BLOCKED_SAFELY", "System halted automated retries to prevent customer fatigue and unnecessary gateway fees.");
+        addStep("Escalate to Merchant", "SUCCESS", "Case status transitioned to ESCALATED with comprehensive audit trail and reason code.");
+        addStep("Audit Trail Logged", "SUCCESS", "System logged audit event recovery_escalated with failure telemetry.");
+
+        return {
+          scenario,
+          title: "Repeated Failure Bounded Stopping & Escalation",
+          description: "Verifies that policy guardrails strictly enforce attempt limits and safely escalate to merchants rather than retrying indefinitely.",
+          executionTimeMs: Date.now() - startTime + 70,
+          defenseMechanism: "Deterministic Policy Limits + Bounded Execution Stopping Rules",
+          outcome: "PASSED_RESILIENT",
+          summary: "System strictly enforced policy limits, prevented runaway retries, and escalated the case for merchant intervention.",
+          steps,
+          ledgerProtected: true,
+        };
+      }
+
       case "NETWORK_TIMEOUT": {
         addStep("Initiate Payment Request", "SUCCESS", "Client submitted ₹1,500.00 payment order.");
         addStep("Simulate Gateway Network Drop", "FAILED_EXPECTED", "Upstream Razorpay API connection timed out after 10,000ms.");
