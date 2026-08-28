@@ -7,6 +7,8 @@ import {
   TransactionStatus,
   RefundStatus,
   AnomalySeverity,
+  RecoveryCaseStatus,
+  RecoveryActionType,
 } from "@prisma/client";
 import { AnalyticsService } from "./analytics.service";
 import { logger } from "@/lib/logger";
@@ -168,6 +170,85 @@ export class SeedService {
             totalLedgerTx++;
           }
         }
+
+        // If payment failed, create a RecoveryCase with timeline
+        if (status === PaymentStatus.FAILED) {
+          const prob = method === "upi" ? 0.72 : method === "card" ? 0.85 : 0.45;
+          const isRecovered = Math.random() < 0.65;
+          const caseStatus = isRecovered
+            ? RecoveryCaseStatus.RECOVERED
+            : Math.random() < 0.3
+              ? RecoveryCaseStatus.EXECUTING
+              : RecoveryCaseStatus.ACTION_PENDING;
+
+          const recAction = method === "upi" ? RecoveryActionType.ALTERNATE_METHOD : RecoveryActionType.PAYMENT_RETRY;
+
+          const recoveryCase = await db.recoveryCase.create({
+            data: {
+              merchantId,
+              paymentId: payment.id,
+              orderId: order.id,
+              riskAmount: amount,
+              failureType: isAnomalyDay ? "method_degradation" : "payment_failure",
+              failureReason: isAnomalyDay ? "UPI gateway timeout (HDFC route)" : "Bank decline: insufficient balance",
+              paymentMethod: method,
+              recoveryProbability: prob,
+              expectedRecoveryAmount: Math.floor(amount * prob),
+              recommendedAction: recAction,
+              selectedAction: recAction,
+              status: caseStatus,
+              attemptCount: isRecovered ? 1 : 1,
+              recoveredAmount: isRecovered ? amount : 0,
+              isSimulated: true,
+              aiReasoningFactors: [
+                `Original ${method.toUpperCase()} payment failed due to gateway timeout`,
+                `Customer historical payment conversion rate is ${(prob * 100).toFixed(0)}%`,
+                `Amount ₹${(amount / 100).toFixed(2)} is within safe automated recovery limit`,
+              ],
+              createdAt: txTime,
+              updatedAt: txTime,
+              resolvedAt: isRecovered ? new Date(txTime.getTime() + 15 * 60 * 1000) : null,
+            },
+          });
+
+          // Timeline entries
+          await db.recoveryTimeline.createMany({
+            data: [
+              {
+                recoveryCaseId: recoveryCase.id,
+                event: "case_created",
+                description: `Revenue at risk detected: ₹${(amount / 100).toLocaleString("en-IN")}`,
+                actor: "system",
+                createdAt: txTime,
+              },
+              {
+                recoveryCaseId: recoveryCase.id,
+                event: "ai_recommendation",
+                description: `AI recommended: ${recAction.replace(/_/g, " ").toLowerCase()}`,
+                actor: "ai_agent",
+                createdAt: new Date(txTime.getTime() + 3000),
+              },
+              {
+                recoveryCaseId: recoveryCase.id,
+                event: "policy_validated",
+                description: "All policy checks passed (amount ≤ ₹1,00,000, attempt < 3)",
+                actor: "policy_engine",
+                createdAt: new Date(txTime.getTime() + 5000),
+              },
+              ...(isRecovered
+                ? [
+                    {
+                      recoveryCaseId: recoveryCase.id,
+                      event: "recovery_completed",
+                      description: `₹${(amount / 100).toLocaleString("en-IN")} successfully recovered via ${recAction.replace(/_/g, " ").toLowerCase()}`,
+                      actor: "system",
+                      createdAt: new Date(txTime.getTime() + 15 * 60 * 1000),
+                    },
+                  ]
+                : []),
+            ],
+          });
+        }
       }
 
       // Compute and persist daily rollup snapshot for this date
@@ -189,7 +270,7 @@ export class SeedService {
         currentValue: 38.5,
         baselineValue: 5.2,
         deviation: 640.4,
-        description: "Payment failure rate spiked to 38.5% on UPI routes due to upstream HDFC Bank gateway degradation. Mitigated after 3 hours.",
+        description: "Payment failure rate spiked to 38.5% on UPI routes due to upstream HDFC Bank gateway degradation. Lumina recovered 74% of at-risk transactions via alternate payment method campaigns.",
         isResolved: true,
         resolvedAt: new Date(anomalyDate.getTime() + 4 * 60 * 60 * 1000),
         detectedAt: anomalyDate,
@@ -219,6 +300,9 @@ export class SeedService {
   static async clearMerchantTelemetry(merchantId: string) {
     logger.info("Clearing merchant demo telemetry", { merchantId });
 
+    await db.recoveryTimeline.deleteMany({ where: { recoveryCase: { merchantId } } });
+    await db.recoveryAction.deleteMany({ where: { recoveryCase: { merchantId } } });
+    await db.recoveryCase.deleteMany({ where: { merchantId } });
     await db.dailyMetric.deleteMany({ where: { merchantId } });
     await db.anomaly.deleteMany({ where: { merchantId } });
     await db.refund.deleteMany({ where: { merchantId } });
@@ -235,7 +319,7 @@ export class SeedService {
    * Fetch live counts of telemetry records in the database
    */
   static async getTelemetryStats(merchantId: string) {
-    const [orders, payments, transactions, refunds, anomalies, dailyMetrics] =
+    const [orders, payments, transactions, refunds, anomalies, dailyMetrics, recoveryCases] =
       await Promise.all([
         db.order.count({ where: { merchantId } }),
         db.payment.count({ where: { merchantId } }),
@@ -243,6 +327,7 @@ export class SeedService {
         db.refund.count({ where: { merchantId } }),
         db.anomaly.count({ where: { merchantId } }),
         db.dailyMetric.count({ where: { merchantId } }),
+        db.recoveryCase.count({ where: { merchantId } }),
       ]);
 
     return {
@@ -252,6 +337,7 @@ export class SeedService {
       refunds,
       anomalies,
       dailyMetrics,
+      recoveryCases,
     };
   }
 }

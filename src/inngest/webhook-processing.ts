@@ -137,7 +137,7 @@ export const processWebhook = inngest.createFunction(
           }
         }
 
-        // Record Payment State Event
+        // Record Payment State Event & Reconcile Recovery Cases
         if (payment) {
           await db.paymentEvent.create({
             data: {
@@ -149,6 +149,60 @@ export const processWebhook = inngest.createFunction(
               metadata: { eventId: parsed.eventId, eventType },
             },
           });
+
+          // Check if this payment or order was part of an active recovery case
+          const activeCase = await db.recoveryCase.findFirst({
+            where: {
+              merchantId: payment.merchantId,
+              OR: [
+                { paymentId: payment.id },
+                { orderId: payment.orderId },
+              ],
+              status: {
+                in: ["DETECTED", "ANALYZING", "ACTION_PENDING", "EXECUTING"],
+              },
+            },
+          });
+
+          if (activeCase) {
+            await db.recoveryCase.update({
+              where: { id: activeCase.id },
+              data: {
+                status: "RECOVERED",
+                recoveredAmount: payment.amount,
+                resolvedAt: new Date(),
+              },
+            });
+
+            // Reconcile and complete active recovery action records
+            await db.recoveryAction.updateMany({
+              where: {
+                recoveryCaseId: activeCase.id,
+                status: "EXECUTING",
+              },
+              data: {
+                status: "SUCCESS",
+                newPaymentId: payment.id,
+                newOrderId: payment.orderId,
+                completedAt: new Date(),
+                output: {
+                  webhookEventId: parsed.eventId,
+                  razorpayPaymentId: paymentId,
+                  amount: payment.amount,
+                },
+              },
+            });
+
+            await db.recoveryTimeline.create({
+              data: {
+                recoveryCaseId: activeCase.id,
+                event: "webhook_recovery_confirmed",
+                description: `Payment captured via webhook (${paymentId}). ₹${(payment.amount / 100).toLocaleString("en-IN")} recovered.`,
+                actor: "system",
+                metadata: { paymentId, eventId: parsed.eventId, newPaymentId: payment.id },
+              },
+            });
+          }
         }
 
         return { status: "processed", eventType, paymentId };
@@ -180,6 +234,22 @@ export const processWebhook = inngest.createFunction(
                 metadata: { eventId: parsed.eventId, eventType },
               },
             });
+
+            // Automatically detect and trigger AI Revenue Recovery Case
+            try {
+              const { RecoveryService } = await import("@/server/services/recovery.service");
+              await RecoveryService.createRecoveryCase({
+                merchantId: payment.merchantId,
+                paymentId: payment.id,
+                orderId: payment.orderId,
+                riskAmount: payment.amount,
+                failureType: "payment_failure",
+                failureReason: "Gateway transaction declined",
+                paymentMethod: payment.paymentMethod || undefined,
+              });
+            } catch (recoveryErr) {
+              logger.warn("Failed to auto-create recovery case from webhook failure", { paymentId }, recoveryErr);
+            }
           }
         }
         return { status: "failed_recorded", paymentId };

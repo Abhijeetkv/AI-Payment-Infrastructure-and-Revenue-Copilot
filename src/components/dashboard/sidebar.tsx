@@ -1,19 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  Landmark,
+  Sparkles,
   LayoutDashboard,
-  ShoppingCart,
+  ShieldCheck,
+  Zap,
+  Activity,
   CreditCard,
   Receipt,
   RotateCcw,
-  Webhook,
   Cpu,
   TrendingUp,
-  AlertCircle,
-  Bot,
   Settings,
   User,
   ArrowLeftRight,
@@ -23,32 +22,34 @@ import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 
 const navigationItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Recovery Cases", href: "/dashboard/recovery", icon: ShieldCheck },
+  { name: "Campaigns", href: "/dashboard/recovery/campaigns", icon: Zap },
+  { name: "Agent Activity", href: "/dashboard/agent", icon: Activity },
   { name: "Payments", href: "/dashboard/payments", icon: CreditCard },
   { name: "Transactions", href: "/dashboard/transactions", icon: Receipt },
   { name: "Refunds", href: "/dashboard/refunds", icon: RotateCcw },
-  { name: "Webhooks", href: "/dashboard/webhooks", icon: Webhook },
-  { name: "Simulator", href: "/dashboard/simulator", icon: Cpu },
   { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp },
-  { name: "Anomalies", href: "/dashboard/anomalies", icon: AlertCircle },
-  { name: "AI Copilot", href: "/dashboard/copilot", icon: Bot },
+  { name: "Simulator", href: "/dashboard/simulator", icon: Cpu },
 ];
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <nav className="h-full w-64 fixed left-0 top-0 border-r border-[#c7c4d8] bg-[#f8f9fa] flex flex-col py-4 px-2 overflow-y-auto z-50 select-none">
       {/* Brand Header */}
       <div className="px-2 mb-6 flex items-center gap-2.5">
-        <Landmark className="h-7 w-7 text-[#2a21d2] shrink-0" />
+        <div className="h-8 w-8 rounded-lg bg-[#2a21d2] flex items-center justify-center text-white shadow-xs">
+          <Sparkles className="h-4.5 w-4.5" />
+        </div>
         <div className="flex flex-col">
           <span className="text-lg font-bold text-[#191c1d] leading-tight">
-            FintechOS
+            Lumina
           </span>
-          <span className="text-xs text-[#464555] leading-tight">
-            Production Environment
+          <span className="text-[11px] font-medium text-[#2a21d2] leading-tight">
+            AI Revenue Recovery Agent
           </span>
         </div>
       </div>
@@ -106,7 +107,7 @@ export function DashboardSidebar() {
         <button
           type="button"
           onClick={() => {
-            window.location.href = "/dashboard";
+            router.push("/dashboard");
           }}
           className="flex items-center gap-4 px-4 py-2 rounded-lg text-[#464555] hover:bg-[#f3f4f5] hover:text-[#191c1d] transition-colors duration-150 cursor-pointer border border-[#c7c4d8] mt-2 text-sm text-left"
         >
@@ -118,7 +119,7 @@ export function DashboardSidebar() {
           type="button"
           onClick={async () => {
             await signOut();
-            window.location.href = "/login";
+            router.push("/login");
           }}
           className="flex items-center gap-4 px-4 py-2 rounded-lg text-[#ba1a1a] hover:bg-[#ffdad6] transition-colors duration-150 cursor-pointer mt-1 text-sm font-medium text-left"
         >

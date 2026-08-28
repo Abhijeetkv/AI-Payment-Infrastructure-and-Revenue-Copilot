@@ -3,8 +3,11 @@ import { AnalyticsService } from "@/server/services/analytics.service";
 import { PaymentService } from "@/server/services/payment.service";
 import { RefundService } from "@/server/services/refund.service";
 import { AnomalyService } from "@/server/services/anomaly.service";
+import { RevenueRiskService } from "@/server/services/revenue-risk.service";
+import { RecoveryPolicyService } from "@/server/services/recovery-policy.service";
 import { LedgerService } from "@/lib/transactions/ledger";
 import { formatCurrency } from "@/lib/utils";
+import { PaymentStatus } from "@prisma/client";
 
 export interface ToolDefinition {
   name: string;
@@ -63,6 +66,61 @@ export const COPILOT_TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         days: { type: "number", description: "Number of past days to query. Default is 30." },
       },
+    },
+  },
+  // ─── Recovery-Specific Tools ───────────────────
+  {
+    name: "getRevenueAtRisk",
+    description: "Calculates total revenue at risk from failed payments, with breakdowns by failure type and payment method.",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "getCustomerPaymentHistory",
+    description: "Retrieves payment history for a specific order or customer, showing past success/failure patterns.",
+    parameters: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "Order ID to look up customer payment history for" },
+      },
+      required: ["orderId"],
+    },
+  },
+  {
+    name: "getFailureHistory",
+    description: "Retrieves recent payment failures with patterns, failure reasons, and frequency analysis.",
+    parameters: {
+      type: "object",
+      properties: {
+        days: { type: "number", description: "Number of past days to analyze. Default is 7." },
+        limit: { type: "number", description: "Maximum failures to return. Default is 20." },
+      },
+    },
+  },
+  {
+    name: "getPaymentMethodPerformance",
+    description: "Retrieves detailed success rate, volume, and performance data for each payment method over the last 30 days.",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "getRecoveryPolicy",
+    description: "Returns the current recovery policy configuration including max attempts, amount limits, and probability thresholds.",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "getRecoveryMetrics",
+    description: "Retrieves comprehensive recovery metrics: revenue at risk, recovered revenue, recovery rate, active cases, and breakdowns.",
+    parameters: {
+      type: "object",
+      properties: {},
     },
   },
 ];
@@ -139,6 +197,7 @@ export async function executeCopilotTool(
         amountPaise: payment.amount,
         status: payment.status,
         paymentMethod: payment.paymentMethod,
+        failureReason: payment.failureReason,
         refundableBalance: formatCurrency(ledger.refundableBalance, payment.currency),
         refundableBalancePaise: ledger.refundableBalance,
         totalRefunded: formatCurrency(ledger.totalRefunded, payment.currency),
@@ -221,6 +280,143 @@ export async function executeCopilotTool(
           marketShare: `${i.percentageShare}%`,
           successRate: `${i.successRate}%`,
         })),
+      };
+    }
+
+    // ─── Recovery-Specific Tools ───────────────────
+
+    case "getRevenueAtRisk": {
+      const riskData = await RevenueRiskService.getRevenueAtRisk(merchantId);
+      return {
+        totalAtRisk: formatCurrency(riskData.totalAtRisk),
+        totalAtRiskPaise: riskData.totalAtRisk,
+        eligiblePayments: riskData.eligiblePayments,
+        byFailureType: riskData.byFailureType.map((f) => ({
+          type: f.failureType,
+          count: f.count,
+          amount: formatCurrency(f.riskAmount),
+        })),
+        byPaymentMethod: riskData.byPaymentMethod.map((m) => ({
+          method: m.method,
+          count: m.count,
+          amount: formatCurrency(m.riskAmount),
+        })),
+      };
+    }
+
+    case "getCustomerPaymentHistory": {
+      const orderId = String(args.orderId || "").trim();
+      const payments = await db.payment.findMany({
+        where: { merchantId, orderId },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+
+      return {
+        orderId,
+        totalAttempts: payments.length,
+        successful: payments.filter((p) => p.status === PaymentStatus.SUCCESS).length,
+        failed: payments.filter((p) => p.status === PaymentStatus.FAILED).length,
+        payments: payments.map((p) => ({
+          id: p.id,
+          status: p.status,
+          method: p.paymentMethod,
+          amount: formatCurrency(p.amount),
+          createdAt: p.createdAt.toISOString(),
+          failureReason: p.failureReason,
+        })),
+      };
+    }
+
+    case "getFailureHistory": {
+      const days = typeof args.days === "number" ? args.days : 7;
+      const limit = typeof args.limit === "number" ? args.limit : 20;
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+      const failures = await db.payment.findMany({
+        where: {
+          merchantId,
+          status: PaymentStatus.FAILED,
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          amount: true,
+          paymentMethod: true,
+          failureReason: true,
+          createdAt: true,
+        },
+      });
+
+      // Count by failure reason
+      const reasonMap = new Map<string, number>();
+      for (const f of failures) {
+        const reason = f.failureReason || "Unknown";
+        reasonMap.set(reason, (reasonMap.get(reason) || 0) + 1);
+      }
+
+      return {
+        timeframe: `Past ${days} days`,
+        totalFailures: failures.length,
+        totalAmountAtRisk: formatCurrency(failures.reduce((s, f) => s + f.amount, 0)),
+        byReason: Array.from(reasonMap.entries()).map(([reason, count]) => ({
+          reason,
+          count,
+        })),
+        recentFailures: failures.slice(0, 10).map((f) => ({
+          id: f.id,
+          amount: formatCurrency(f.amount),
+          method: f.paymentMethod,
+          reason: f.failureReason,
+          at: f.createdAt.toISOString(),
+        })),
+      };
+    }
+
+    case "getPaymentMethodPerformance": {
+      const performance = await RevenueRiskService.getPaymentMethodPerformance(merchantId);
+      return {
+        methods: performance.map((p) => ({
+          method: p.method,
+          totalTransactions: p.totalTransactions,
+          successfulTransactions: p.successfulTransactions,
+          failedTransactions: p.failedTransactions,
+          successRate: `${p.successRate}%`,
+          volume: formatCurrency(p.volume),
+        })),
+      };
+    }
+
+    case "getRecoveryPolicy": {
+      const policy = RecoveryPolicyService.getPolicy();
+      return {
+        maxAttempts: policy.maxAttempts,
+        maxRecoveryAmount: formatCurrency(policy.maxRecoveryAmountPaise),
+        minRecoveryProbability: `${(policy.minRecoveryProbability * 100).toFixed(0)}%`,
+        retryDelayMinutes: policy.retryDelayMinutes,
+        expirationHours: policy.expirationHours,
+        allowedActions: policy.allowedActions,
+      };
+    }
+
+    case "getRecoveryMetrics": {
+      const metrics = await RevenueRiskService.getRecoveryMetrics(merchantId);
+      return {
+        revenueAtRisk: formatCurrency(metrics.revenueAtRisk),
+        revenueAtRiskPaise: metrics.revenueAtRisk,
+        expectedRecovery: formatCurrency(metrics.expectedRecovery),
+        recoveredRevenue: formatCurrency(metrics.recoveredRevenue),
+        recoveredRevenuePaise: metrics.recoveredRevenue,
+        recoveryRate: `${metrics.recoveryRate}%`,
+        activeCases: metrics.activeCases,
+        totalCases: metrics.totalCases,
+        recoveredCases: metrics.recoveredCases,
+        failedCases: metrics.failedCases,
+        escalatedCases: metrics.escalatedCases,
+        stoppedCases: metrics.stoppedCases,
+        avgRecoveryTimeMinutes: metrics.avgRecoveryTime,
       };
     }
 

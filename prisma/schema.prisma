@@ -93,6 +93,7 @@ model Merchant {
   dailyMetrics       DailyMetric[]
   aiConversations    AIConversation[]
   idempotencyRecords IdempotencyRecord[]
+  recoveryCases      RecoveryCase[]
 
   @@unique([userId])
   @@index([userId])
@@ -122,8 +123,9 @@ model Order {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  merchant Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  payments Payment[]
+  merchant       Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payments       Payment[]
+  recoveryCases  RecoveryCase[]
 
   @@index([merchantId])
   @@index([razorpayOrderId])
@@ -161,11 +163,12 @@ model Payment {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  transactions  Transaction[]
-  refunds       Refund[]
-  paymentEvents PaymentEvent[]
+  merchant       Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  refunds        Refund[]
+  paymentEvents  PaymentEvent[]
+  recoveryCases  RecoveryCase[]
 
   @@index([merchantId])
   @@index([orderId])
@@ -469,4 +472,117 @@ model AIMessage {
   @@index([conversationId])
   @@index([createdAt])
   @@map("ai_messages")
+}
+
+// ─── Recovery Domain ────────────────────────────────
+
+enum RecoveryCaseStatus {
+  DETECTED
+  ANALYZING
+  ACTION_PENDING
+  EXECUTING
+  RECOVERED
+  FAILED
+  ESCALATED
+  STOPPED
+  EXPIRED
+}
+
+enum RecoveryActionType {
+  PAYMENT_RETRY
+  ALTERNATE_METHOD
+  SCHEDULED_RETRY
+  MERCHANT_ESCALATION
+  STOP_RECOVERY
+}
+
+enum RecoveryStopReason {
+  MAX_ATTEMPTS_REACHED
+  PAYMENT_RECOVERED
+  RECOVERY_NOT_ELIGIBLE
+  LOW_RECOVERY_PROBABILITY
+  CUSTOMER_ALREADY_PAID
+  PAYMENT_EXPIRED
+  POLICY_BLOCKED
+  MERCHANT_ESCALATION
+}
+
+model RecoveryCase {
+  id                     String              @id @default(cuid())
+  merchantId             String
+  paymentId              String
+  orderId                String
+  customerId             String?
+  riskAmount             Int                 // Amount at risk in paise
+  failureType            String              // "payment_failure", "checkout_abandonment", etc.
+  failureReason          String?
+  paymentMethod          String?
+  recoveryProbability    Float               @default(0)
+  expectedRecoveryAmount Int                 @default(0)
+  recommendedAction      RecoveryActionType?
+  selectedAction         RecoveryActionType?
+  status                 RecoveryCaseStatus  @default(DETECTED)
+  attemptCount           Int                 @default(0)
+  maxAttempts            Int                 @default(3)
+  recoveredAmount        Int                 @default(0)
+  stopReason             RecoveryStopReason?
+  escalationReason       String?
+  aiReasoningFactors     Json?               // Why AI recommended this action
+  policyCheckResults     Json?               // Policy validation results
+  isSimulated            Boolean             @default(false)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  resolvedAt             DateTime?
+
+  merchant  Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment   Payment           @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  order     Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actions   RecoveryAction[]
+  timeline  RecoveryTimeline[]
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([paymentId])
+  @@index([failureType])
+  @@index([createdAt])
+  @@map("recovery_cases")
+}
+
+model RecoveryAction {
+  id              String             @id @default(cuid())
+  recoveryCaseId  String
+  merchantId      String
+  actionType      RecoveryActionType
+  attemptNumber   Int
+  status          String             @default("PENDING") // PENDING, EXECUTING, SUCCESS, FAILED
+  input           Json?              // Action parameters
+  output          Json?              // Action result
+  newPaymentId    String?            // If retry created a new payment
+  newOrderId      String?            // If retry created a new order
+  executedAt      DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime           @default(now())
+
+  recoveryCase RecoveryCase @relation(fields: [recoveryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([recoveryCaseId])
+  @@index([actionType])
+  @@index([status])
+  @@map("recovery_actions")
+}
+
+model RecoveryTimeline {
+  id              String   @id @default(cuid())
+  recoveryCaseId  String
+  event           String   // "case_created", "ai_recommendation", "policy_validated", etc.
+  description     String
+  actor           String   @default("system") // "system", "ai_agent", "policy_engine", "merchant"
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  recoveryCase RecoveryCase @relation(fields: [recoveryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([recoveryCaseId])
+  @@index([createdAt])
+  @@map("recovery_timeline")
 }
