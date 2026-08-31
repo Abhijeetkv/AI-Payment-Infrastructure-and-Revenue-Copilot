@@ -1,6 +1,6 @@
 # Lumina — Autonomous AI Revenue Recovery Agent
 
-An enterprise-grade autonomous AI Revenue Recovery Agent built for the **Razorpay AI Buildathon 2026 (AI Revenue Recovery Track)**.
+Lumina is an enterprise-grade autonomous AI revenue recovery platform for payment infrastructure. 
 
 Lumina actively monitors payment infrastructure, detects at-risk revenue from failures and check-out drop-offs, calculates recovery probabilities, determines policy-guarded recovery interventions, executes durable workflows via Razorpay Test Mode and Inngest, and measures the money actually recovered in an immutable double-entry financial ledger.
 
