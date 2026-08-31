@@ -157,8 +157,8 @@ export default function CampaignsPage() {
               </div>
               <div className="bg-white p-3 rounded-lg border border-[#c8e6c9]">
                 <span className="text-[11px] text-[#75777a] uppercase">Action</span>
-                <Link href="/dashboard/recovery">
-                  <span className="text-xs font-semibold text-[#2a21d2] hover:underline block mt-1">
+                <Link href="/recovery">
+                  <span className="text-xs font-semibold text-[#2a21d2] hover:underline block mt-1 cursor-pointer">
                     View in Pipeline →
                   </span>
                 </Link>

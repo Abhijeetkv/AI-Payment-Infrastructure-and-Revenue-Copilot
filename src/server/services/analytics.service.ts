@@ -17,6 +17,10 @@ export interface OverviewMetricsResult {
   grossRevenue: number; // in paise
   refundAmount: number; // in paise
   netRevenue: number;   // in paise
+  recoveredRevenue: number; // in paise
+  revenueAtRisk: number;    // in paise
+  recoveryRate: number;     // percentage (0-100)
+  recoveredCasesCount: number;
   totalTransactions: number;
   successfulPayments: number;
   failedPayments: number;
@@ -30,6 +34,7 @@ export interface OverviewMetricsResult {
   comparison?: {
     grossRevenueGrowth: number; // % change
     netRevenueGrowth: number;   // % change
+    recoveredRevenueGrowth?: number; // % change
     volumeGrowth: number;       // % change
     successRateDelta: number;   // delta
   };
@@ -40,6 +45,7 @@ export interface TimeseriesDataPoint {
   grossRevenue: number; // formatted in currency unit (Rupees for display or paise)
   netRevenue: number;
   refundAmount: number;
+  recoveredRevenue: number;
   transactionCount: number;
   successfulCount: number;
   failedCount: number;
@@ -81,6 +87,8 @@ export class AnalyticsService {
       pendingCount,
       partialRefundCount,
       fullRefundCount,
+      recoveryAgg,
+      recoveredCount,
     ] = await Promise.all([
       db.transaction.aggregate({
         where: {
@@ -143,11 +151,22 @@ export class AnalyticsService {
           createdAt: { gte: startDate, lte: endDate },
         },
       }),
+      db.recoveryCase.aggregate({
+        where: { merchantId, createdAt: { gte: startDate, lte: endDate } },
+        _sum: { recoveredAmount: true, riskAmount: true },
+      }),
+      db.recoveryCase.count({
+        where: { merchantId, status: "RECOVERED", createdAt: { gte: startDate, lte: endDate } },
+      }),
     ]);
 
     const grossRevenue = creditSum._sum.amount || 0;
     const refundAmount = debitSum._sum.amount || 0;
     const netRevenue = Math.max(0, grossRevenue - refundAmount);
+    const recoveredRevenue = recoveryAgg._sum.recoveredAmount || 0;
+    const revenueAtRisk = recoveryAgg._sum.riskAmount || 0;
+    const recoveryRate = revenueAtRisk > 0 ? Number(((recoveredRevenue / revenueAtRisk) * 100).toFixed(1)) : 0;
+    const recoveredCasesCount = recoveredCount;
     const totalTransactions = paymentsCount;
     const successfulPayments = successCount;
     const failedPayments = failedCount;
@@ -159,7 +178,7 @@ export class AnalyticsService {
     const refundRate = successfulPayments > 0 ? Number((((partialRefundCount + fullRefundCount) / successfulPayments) * 100).toFixed(1)) : 0;
 
     // Previous period aggregations for growth calculations
-    const [prevCreditSum, prevDebitSum, prevPaymentsCount, prevSuccessCount] = await Promise.all([
+    const [prevCreditSum, prevDebitSum, prevPaymentsCount, prevSuccessCount, prevRecoveryAgg] = await Promise.all([
       db.transaction.aggregate({
         where: {
           merchantId,
@@ -190,10 +209,15 @@ export class AnalyticsService {
           createdAt: { gte: prevStartDate, lte: prevEndDate },
         },
       }),
+      db.recoveryCase.aggregate({
+        where: { merchantId, createdAt: { gte: prevStartDate, lte: prevEndDate } },
+        _sum: { recoveredAmount: true },
+      }),
     ]);
 
     const prevGrossRevenue = prevCreditSum._sum.amount || 0;
     const prevNetRevenue = Math.max(0, prevGrossRevenue - (prevDebitSum._sum.amount || 0));
+    const prevRecoveredRevenue = prevRecoveryAgg._sum.recoveredAmount || 0;
     const prevSuccessRate = prevPaymentsCount > 0 ? (prevSuccessCount / prevPaymentsCount) * 100 : 0;
 
     const calculateGrowth = (current: number, previous: number) => {
@@ -205,6 +229,10 @@ export class AnalyticsService {
       grossRevenue,
       refundAmount,
       netRevenue,
+      recoveredRevenue,
+      revenueAtRisk,
+      recoveryRate,
+      recoveredCasesCount,
       totalTransactions,
       successfulPayments,
       failedPayments,
@@ -218,6 +246,7 @@ export class AnalyticsService {
       comparison: {
         grossRevenueGrowth: calculateGrowth(grossRevenue, prevGrossRevenue),
         netRevenueGrowth: calculateGrowth(netRevenue, prevNetRevenue),
+        recoveredRevenueGrowth: calculateGrowth(recoveredRevenue, prevRecoveredRevenue),
         volumeGrowth: calculateGrowth(totalTransactions, prevPaymentsCount),
         successRateDelta: Number((successRate - prevSuccessRate).toFixed(1)),
       },
@@ -233,8 +262,8 @@ export class AnalyticsService {
   ): Promise<TimeseriesDataPoint[]> {
     const { startDate, endDate, granularity = "day" } = options;
 
-    // Fetch all transactions and payments in the window
-    const [transactions, payments] = await Promise.all([
+    // Fetch all transactions, payments, and recovery cases in the window
+    const [transactions, payments, recoveryCases] = await Promise.all([
       db.transaction.findMany({
         where: {
           merchantId,
@@ -257,6 +286,18 @@ export class AnalyticsService {
         select: {
           id: true,
           status: true,
+          createdAt: true,
+        },
+      }),
+      db.recoveryCase.findMany({
+        where: {
+          merchantId,
+          createdAt: { gte: startDate, lte: endDate },
+        },
+        select: {
+          id: true,
+          status: true,
+          recoveredAmount: true,
           createdAt: true,
         },
       }),
@@ -287,6 +328,7 @@ export class AnalyticsService {
       {
         grossRevenue: number;
         refundAmount: number;
+        recoveredRevenue: number;
         transactionCount: number;
         successfulCount: number;
         failedCount: number;
@@ -302,6 +344,7 @@ export class AnalyticsService {
         bucketMap.set(key, {
           grossRevenue: 0,
           refundAmount: 0,
+          recoveredRevenue: 0,
           transactionCount: 0,
           successfulCount: 0,
           failedCount: 0,
@@ -316,6 +359,7 @@ export class AnalyticsService {
       const entry = bucketMap.get(key) || {
         grossRevenue: 0,
         refundAmount: 0,
+        recoveredRevenue: 0,
         transactionCount: 0,
         successfulCount: 0,
         failedCount: 0,
@@ -329,12 +373,31 @@ export class AnalyticsService {
       bucketMap.set(key, entry);
     }
 
+    // Populate recovery cases
+    for (const c of recoveryCases) {
+      const key = formatDateBucket(new Date(c.createdAt));
+      const entry = bucketMap.get(key) || {
+        grossRevenue: 0,
+        refundAmount: 0,
+        recoveredRevenue: 0,
+        transactionCount: 0,
+        successfulCount: 0,
+        failedCount: 0,
+      };
+
+      if (c.recoveredAmount) {
+        entry.recoveredRevenue += c.recoveredAmount;
+      }
+      bucketMap.set(key, entry);
+    }
+
     // Populate payment counts
     for (const p of payments) {
       const key = formatDateBucket(new Date(p.createdAt));
       const entry = bucketMap.get(key) || {
         grossRevenue: 0,
         refundAmount: 0,
+        recoveredRevenue: 0,
         transactionCount: 0,
         successfulCount: 0,
         failedCount: 0,
@@ -371,6 +434,7 @@ export class AnalyticsService {
         grossRevenue: val.grossRevenue,
         netRevenue,
         refundAmount: val.refundAmount,
+        recoveredRevenue: val.recoveredRevenue,
         transactionCount: val.transactionCount,
         successfulCount: val.successfulCount,
         failedCount: val.failedCount,

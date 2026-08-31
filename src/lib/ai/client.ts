@@ -192,7 +192,12 @@ export async function generateCopilotResponse(
   const lastUserMsg = messages[messages.length - 1]?.content || "";
 
   // 1. Google Gemini Provider
-  if (aiProvider === "gemini" && geminiApiKey && geminiApiKey !== "your-gemini-api-key") {
+  if (
+    process.env.NODE_ENV !== "test" &&
+    aiProvider === "gemini" &&
+    geminiApiKey &&
+    geminiApiKey !== "your-gemini-api-key"
+  ) {
     try {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({
@@ -223,7 +228,12 @@ export async function generateCopilotResponse(
   }
 
   // 2. OpenAI Provider
-  if (aiProvider === "openai" && openaiApiKey && !openaiApiKey.includes("your-")) {
+  if (
+    process.env.NODE_ENV !== "test" &&
+    aiProvider === "openai" &&
+    openaiApiKey &&
+    !openaiApiKey.includes("your-")
+  ) {
     try {
       const openai = new OpenAI({ apiKey: openaiApiKey });
       const toolOutput = await generateDeterministicResponse(merchantId, lastUserMsg);
@@ -263,8 +273,8 @@ export interface RecoveryCaseAnalysisInput {
   merchantId: string;
   riskAmount: number;
   failureType: string;
-  failureReason?: string | null;
-  paymentMethod?: string | null;
+  failureReason: string | null;
+  paymentMethod: string | null;
   attemptCount: number;
   probability: number;
   factors: string[];
@@ -336,6 +346,11 @@ export async function generateRecoveryCaseAnalysis(
       provider: "deterministic_engine",
     };
   };
+
+  // If in test mode, immediately return the deterministic fallback
+  if (process.env.NODE_ENV === "test") {
+    return deterministicFallback();
+  }
 
   const caseDataStr = JSON.stringify(
     {

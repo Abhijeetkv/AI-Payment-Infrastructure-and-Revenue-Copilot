@@ -14,9 +14,10 @@ import { formatCurrency } from "@/lib/utils";
 
 export interface RevenueTimeseriesPoint {
   date: string;
-  grossRevenue: number; // in paise
-  netRevenue: number;   // in paise
-  refundAmount: number; // in paise
+  grossRevenue: number;     // in paise
+  netRevenue: number;       // in paise
+  recoveredRevenue?: number;// in paise
+  refundAmount?: number;    // in paise
 }
 
 interface RevenueChartProps {
@@ -100,9 +101,9 @@ export function RevenueChart({
               <stop offset="5%" stopColor="#087343" stopOpacity={0.2} />
               <stop offset="95%" stopColor="#087343" stopOpacity={0.0} />
             </linearGradient>
-            <linearGradient id="refundGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#c92a2a" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#c92a2a" stopOpacity={0.0} />
+            <linearGradient id="recoveredGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.0} />
             </linearGradient>
           </defs>
 
@@ -152,17 +153,16 @@ export function RevenueChart({
 
           <Area
             type="monotone"
-            dataKey="refundAmount"
-            name="Refunds"
-            stroke="#c92a2a"
-            strokeWidth={1.5}
+            dataKey="recoveredRevenue"
+            name="Recovered Revenue"
+            stroke="#7c3aed"
+            strokeWidth={2}
             strokeDasharray="4 4"
             fillOpacity={1}
-            fill="url(#refundGradient)"
+            fill="url(#recoveredGradient)"
           />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
-

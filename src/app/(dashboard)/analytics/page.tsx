@@ -3,7 +3,7 @@
 import * as React from "react";
 import {
   TrendingUp,
-  RotateCcw,
+  ShieldCheck,
   RefreshCw,
   CreditCard,
   Sparkles,
@@ -24,6 +24,10 @@ interface OverviewData {
   grossRevenue: number;
   refundAmount: number;
   netRevenue: number;
+  recoveredRevenue: number;
+  revenueAtRisk: number;
+  recoveryRate: number;
+  recoveredCasesCount: number;
   totalTransactions: number;
   successfulPayments: number;
   failedPayments: number;
@@ -37,6 +41,7 @@ interface OverviewData {
   comparison?: {
     grossRevenueGrowth: number;
     netRevenueGrowth: number;
+    recoveredRevenueGrowth?: number;
     volumeGrowth: number;
     successRateDelta: number;
   };
@@ -246,20 +251,21 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Refunded Volume */}
+        {/* Revenue Recovered */}
         <div className="bg-white border border-[#e9ecef] rounded-lg p-4 hover:border-[#c4c7c7] transition-colors shadow-xs">
           <div className="text-xs font-semibold text-[#444748] uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>Refunded Volume</span>
-            <RotateCcw className="h-4 w-4 text-[#c92a2a]" />
+            <span>Revenue Recovered</span>
+            <ShieldCheck className="h-4 w-4 text-[#7c3aed]" />
           </div>
           <div className="text-2xl font-bold text-[#191c1d] tracking-tight">
-            {overview ? formatCurrency(overview.refundAmount) : "₹0.00"}
+            {overview ? formatCurrency(overview.recoveredRevenue) : "₹0.00"}
           </div>
           <div className="mt-2 flex items-center gap-1.5">
-            <span className="text-[#c92a2a] font-mono text-xs font-semibold bg-[#c92a2a]/10 px-1.5 py-0.5 rounded">
-              {overview?.refundRate || 0}%
+            <span className="text-[#7c3aed] font-mono text-xs font-semibold bg-[#7c3aed]/10 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+              <Sparkles className="h-3 w-3" />
+              {overview?.recoveryRate || 0}%
             </span>
-            <span className="text-[11px] text-[#444748]">refund rate</span>
+            <span className="text-[11px] text-[#444748]">{overview?.recoveredCasesCount || 0} cases recovered</span>
           </div>
         </div>
 
@@ -301,10 +307,10 @@ export default function AnalyticsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#e9ecef] pb-4">
           <div>
             <h3 className="text-base font-semibold text-[#191c1d]">
-              Revenue & Refund Timeline
+              Revenue & Recovery Timeline
             </h3>
             <p className="text-xs text-[#444748] mt-0.5 font-normal">
-              Daily double-entry ledger totals across Gross Revenue, Net Revenue, and Refunds
+              Daily double-entry ledger totals across Gross Revenue, Net Revenue, and AI Recovered Revenue
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs font-mono">
@@ -316,9 +322,9 @@ export default function AnalyticsPage() {
               <span className="h-2 w-2 rounded-full bg-[#087343]" />
               Net
             </span>
-            <span className="flex items-center gap-1.5 text-[#c92a2a] font-semibold">
-              <span className="h-2 w-2 rounded-full bg-[#c92a2a]" />
-              Refunds
+            <span className="flex items-center gap-1.5 text-[#7c3aed] font-semibold">
+              <span className="h-2 w-2 rounded-full bg-[#7c3aed]" />
+              Recovered
             </span>
           </div>
         </div>

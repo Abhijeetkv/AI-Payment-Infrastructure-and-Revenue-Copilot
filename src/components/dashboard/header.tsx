@@ -13,8 +13,8 @@ export function DashboardHeader() {
     <header className="h-16 sticky top-0 z-40 w-full bg-[#f8f9fa] border-b border-[#c7c4d8] flex items-center justify-between px-6 select-none">
       {/* Left Brand and Navigation Links */}
       <div className="flex items-center gap-6">
-        <Link href="/dashboard" className="text-lg font-bold text-[#2a21d2]">
-          FintechOS
+        <Link href="/" className="text-lg font-bold text-[#2a21d2]">
+          Lumina
         </Link>
         <div className="hidden sm:flex items-center gap-4 text-xs font-normal text-[#464555]">
           <a
@@ -33,8 +33,8 @@ export function DashboardHeader() {
           >
             Help
           </a>
-          <Link href="/dashboard/webhooks" className="hover:text-[#2a21d2] transition-colors">
-            API
+          <Link href="/settings" className="hover:text-[#2a21d2] transition-colors">
+            API & Keys
           </Link>
         </div>
       </div>
