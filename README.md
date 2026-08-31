@@ -45,31 +45,31 @@ Audit Trail & Revenue Impact Analytics
 ```mermaid
 graph TD
     subgraph "Merchant Command Center"
-        A[Overview Command Center (/)] --> B[Next.js App Router]
-        C[Recovery Pipeline (/recovery)] --> B
-        D[AI Copilot (/copilot)] --> B
-        E[Agent Stream (/agent)] --> B
-        F[Chaos Simulator (/simulator)] --> B
+        A["Overview Command Center (/)"] --> B["Next.js App Router"]
+        C["Recovery Pipeline (/recovery)"] --> B
+        D["AI Copilot (/copilot)"] --> B
+        E["Agent Stream (/agent)"] --> B
+        F["Chaos Simulator (/simulator)"] --> B
     end
 
     subgraph "Core AI & Recovery Layer"
-        B --> G[RevenueRiskService]
-        B --> H[RecoveryService]
-        B --> I[RecoveryPolicyEngine]
-        B --> J[AI Agent & Copilot - Gemini 2.0 / OpenAI]
+        B --> G["RevenueRiskService"]
+        B --> H["RecoveryService"]
+        B --> I["RecoveryPolicyEngine"]
+        B --> J["AI Agent & Copilot (Gemini 2.0 / OpenAI)"]
     end
 
     subgraph "Financial & State Infrastructure"
-        H --> K[Payment State Machine]
-        H --> L[Immutable Double-Entry Ledger]
-        H --> M[Audit Log Service]
-        H --> N[Statistical Anomaly Engine]
+        H --> K["Payment State Machine"]
+        H --> L["Immutable Double-Entry Ledger"]
+        H --> M["Audit Log Service"]
+        H --> N["Statistical Anomaly Engine"]
     end
 
     subgraph "Durable Execution & Gateway"
-        H --> O[Inngest Durable Step Functions]
-        O --> P[Razorpay Client]
-        P --> Q[Razorpay Webhook Ingestion]
+        H --> O["Inngest Durable Step Functions"]
+        O --> P["Razorpay Client"]
+        P --> Q["Razorpay Webhook Ingestion"]
         Q --> O
     end
 ```
