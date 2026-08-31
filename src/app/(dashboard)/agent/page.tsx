@@ -260,7 +260,7 @@ export default function AgentActivityPage() {
                               {act.event.replace(/_/g, " ")}
                             </span>
                             <Link
-                              href={`/dashboard/recovery/${act.recoveryCaseId}`}
+                              href={`/recovery/${act.recoveryCaseId}`}
                               className="text-[10px] font-mono text-[#2a21d2] hover:underline"
                             >
                               #{act.recoveryCaseId.slice(-6).toUpperCase()}

@@ -412,7 +412,7 @@ export default function RefundsPage() {
                     {/* Payment ID Link */}
                     <td className="py-4 px-6">
                       <Link
-                        href={`/dashboard/payments/${refund.paymentId}`}
+                        href={`/payments/${refund.paymentId}`}
                         onClick={(e) => e.stopPropagation()}
                         className="inline-flex items-center gap-1 text-[#2a21d2] font-semibold font-mono hover:underline"
                       >
@@ -506,9 +506,9 @@ export default function RefundsPage() {
               ) : eligiblePayments.length === 0 ? (
                 <div className="p-6 text-center text-xs text-[#444748] space-y-2">
                   <p>No eligible captured payments found.</p>
-                  <Link href="/dashboard/orders">
+                  <Link href="/simulator">
                     <Button size="sm" variant="outline" className="text-xs">
-                      Create Test Order & Pay First
+                      Simulate Captured Payment First
                     </Button>
                   </Link>
                 </div>
@@ -631,7 +631,7 @@ export default function RefundsPage() {
             </div>
 
             <div className="pt-2 flex items-center justify-between border-t border-[#e9ecef]">
-              <Link href={`/dashboard/payments/${inspectRefund.paymentId}`}>
+              <Link href={`/payments/${inspectRefund.paymentId}`}>
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs text-[#2a21d2] border-[#c4c7c7] hover:bg-[#f3f4f5]">
                   <span>View Payment Ledger</span>
                   <ArrowUpRight className="h-3.5 w-3.5" />

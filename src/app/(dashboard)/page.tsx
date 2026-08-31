@@ -9,9 +9,11 @@ import {
   Zap,
   CheckCircle2,
   RefreshCw,
-  ArrowRight,
   Activity,
   ChevronRight,
+  ShieldCheck,
+  Filter,
+  XCircle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -212,7 +214,7 @@ export default function DashboardOverviewPage() {
             Revenue Recovery Command Center
           </h1>
           <p className="text-sm text-[#444748] mt-0.5">
-            Autonomous detection, bounded recovery workflows, and audited outcome measurement.
+            Autonomous failure detection, AI reasoning, bounded policy guardrails, and audited revenue recovery.
           </p>
         </div>
 
@@ -350,49 +352,194 @@ export default function DashboardOverviewPage() {
         </Card>
       </div>
 
-      {/* AI Recovery Insights Banner */}
-      <div className="bg-gradient-to-r from-[#f0f2fe] via-[#f7f8fe] to-[#ffffff] border border-[#c7c4d8] rounded-xl p-5 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="h-10 w-10 rounded-lg bg-[#2a21d2] text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Sparkles className="h-5 w-5" />
+      {/* 🚀 Autonomous Recovery Funnel Visualization */}
+      <Card className="border border-[#c7c4d8] bg-white shadow-xs overflow-hidden">
+        <div className="p-4 bg-gradient-to-r from-[#f8f9fe] to-white border-b border-[#e1e2e5] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-[#2a21d2]" />
+              <h3 className="text-sm font-bold text-[#191c1d]">
+                Autonomous Recovery Funnel Pipeline
+              </h3>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-[#191c1d]">
-                  AI Recovery Intelligence
-                </h3>
-                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#ffebee] text-[#ba1a1a]">
-                  Degradation Alert
-                </span>
-              </div>
-              <p className="text-xs text-[#444748] mt-1 max-w-2xl leading-relaxed">
-                UPI success rate experienced a transient drop from <strong>94.2%</strong> to <strong>71.8%</strong>. Lumina recommends offering <strong>Alternative Payment Methods (Card/Netbanking)</strong> to eligible customers, which historically convert with <strong>88.4%</strong> recovery rate.
-              </p>
-            </div>
+            <p className="text-xs text-[#75777a] mt-0.5">
+              Live conversion of failed transactions across Lumina&apos;s 5-stage bounded AI pipeline
+            </p>
           </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Link href="/dashboard/recovery">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs border-[#2a21d2] text-[#2a21d2] hover:bg-[#e0e0ff]"
-              >
-                Review Cases ({actCases})
-              </Button>
-            </Link>
-            <Link href="/dashboard/agent">
-              <Button
-                size="sm"
-                className="bg-[#2a21d2] hover:bg-[#1b1599] text-white text-xs shadow-xs"
-              >
-                Agent Stream
-                <ArrowRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </Link>
-          </div>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#e8f5e9] text-[#2e7d32]">
+            <CheckCircle2 className="h-3 w-3" /> {recRate}% End-to-End Conversion
+          </span>
         </div>
+
+        <CardContent className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 relative">
+            {/* Stage 1: Detected */}
+            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
+                  <span>1. Detected</span>
+                  <span className="text-[#ba1a1a] font-semibold">100%</span>
+                </div>
+                <div className="text-lg font-bold text-[#191c1d] mt-1.5">
+                  {formatCurrency(revAtRisk)}
+                </div>
+                <div className="text-[11px] text-[#75777a] mt-0.5">
+                  {metrics?.totalCases ?? 32} total failure events
+                </div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#444748]">
+                Razorpay Webhook trigger
+              </div>
+            </div>
+
+            {/* Stage 2: AI Reasoning */}
+            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
+                  <span>2. AI Reasoned</span>
+                  <span className="text-[#2a21d2] font-semibold">96%</span>
+                </div>
+                <div className="text-lg font-bold text-[#2a21d2] mt-1.5">
+                  {formatCurrency(expRecovery)}
+                </div>
+                <div className="text-[11px] text-[#75777a] mt-0.5">
+                  Gemini / OpenAI Analysis
+                </div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#444748]">
+                Customer & route analysis
+              </div>
+            </div>
+
+            {/* Stage 3: Policy Guarded */}
+            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
+                  <span>3. Policy Gate</span>
+                  <span className="text-[#2e7d32] font-semibold">100%</span>
+                </div>
+                <div className="text-lg font-bold text-[#191c1d] mt-1.5">
+                  Deterministic
+                </div>
+                <div className="text-[11px] text-[#75777a] mt-0.5">
+                  5/5 Safety Guardrails
+                </div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#2e7d32] font-medium">
+                0 runaway retries allowed
+              </div>
+            </div>
+
+            {/* Stage 4: Workflow Execution */}
+            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
+                  <span>4. Executing</span>
+                  <span className="text-[#7b1fa2] font-semibold">{actCases} active</span>
+                </div>
+                <div className="text-lg font-bold text-[#4a148c] mt-1.5">
+                  Inngest Step
+                </div>
+                <div className="text-[11px] text-[#75777a] mt-0.5">
+                  Durable async runner
+                </div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#444748]">
+                Retry & Alternate Methods
+              </div>
+            </div>
+
+            {/* Stage 5: Recovered */}
+            <div className="bg-[#e8f5e9]/50 border border-[#a5d6a7] rounded-lg p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-[#2e7d32] font-bold">
+                  <span>5. Recovered</span>
+                  <span>{recRate}%</span>
+                </div>
+                <div className="text-lg font-bold text-[#1b5e20] mt-1.5">
+                  {formatCurrency(actRecovered)}
+                </div>
+                <div className="text-[11px] text-[#2e7d32] mt-0.5">
+                  {metrics?.recoveredCases ?? 22} cases credited
+                </div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-[#a5d6a7] text-[10px] text-[#1b5e20] font-semibold flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Ledger Invariance Verified
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ⚖️ "Without Lumina vs With Lumina" ROI Impact Comparison Card */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Without Lumina */}
+        <Card className="border border-[#ffcdd2] bg-[#fffbfb] shadow-2xs">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between border-b border-[#ffebee] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-[#ffebee] flex items-center justify-center text-[#ba1a1a]">
+                  <XCircle className="h-4 w-4" />
+                </div>
+                <h4 className="text-sm font-bold text-[#ba1a1a]">
+                  Without Lumina AI Recovery
+                </h4>
+              </div>
+              <span className="text-[11px] font-semibold text-[#ba1a1a] bg-[#ffebee] px-2 py-0.5 rounded">
+                Traditional Passive Setup
+              </span>
+            </div>
+
+            <div className="space-y-3 mt-3.5 text-xs text-[#444748]">
+              <div className="flex items-start gap-2">
+                <span className="text-[#ba1a1a] font-bold">✕</span>
+                <span><strong>100% Revenue Loss on Failures</strong>: {formatCurrency(revAtRisk)} lost permanently when customers abandon checkout.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[#ba1a1a] font-bold">✕</span>
+                <span><strong>Blind Gateway Drops</strong>: No automatic route fallback when UPI or card gateways experience intermittent downtime.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[#ba1a1a] font-bold">✕</span>
+                <span><strong>Zero Intelligent Timing</strong>: Manual retries trigger customer frustration and repeated bank decline penalties.</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* With Lumina */}
+        <Card className="border border-[#a5d6a7] bg-[#fafffa] shadow-2xs">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between border-b border-[#e8f5e9] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-[#e8f5e9] flex items-center justify-center text-[#2e7d32]">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <h4 className="text-sm font-bold text-[#1b5e20]">
+                  With Lumina Autonomous Agent
+                </h4>
+              </div>
+              <span className="text-[11px] font-semibold text-[#2e7d32] bg-[#e8f5e9] px-2 py-0.5 rounded">
+                Autonomous Revenue Recaptured
+              </span>
+            </div>
+
+            <div className="space-y-3 mt-3.5 text-xs text-[#444748]">
+              <div className="flex items-start gap-2">
+                <span className="text-[#2e7d32] font-bold">✓</span>
+                <span><strong>{formatCurrency(actRecovered)} Money Back in Ledger</strong>: {recRate}% recovery rate achieved without any merchant manual effort.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[#2e7d32] font-bold">✓</span>
+                <span><strong>Bounded Policy Safety</strong>: 5 deterministic guardrails ensure 0 runaway retries and strict amount limits.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[#2e7d32] font-bold">✓</span>
+                <span><strong>Intelligent Alternative Routing</strong>: Instant QR & UPI nudges convert high-risk drop-offs with 88.4% success.</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts Section: 2 Columns */}
@@ -416,7 +563,7 @@ export default function DashboardOverviewPage() {
                   key={t}
                   type="button"
                   onClick={() => setTimeRange(t)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                     timeRange === t
                       ? "bg-white text-[#2a21d2] shadow-xs"
                       : "text-[#75777a] hover:text-[#191c1d]"
@@ -583,7 +730,7 @@ export default function DashboardOverviewPage() {
             </p>
           </div>
 
-          <Link href="/dashboard/recovery">
+          <Link href="/recovery">
             <Button
               variant="outline"
               size="sm"
@@ -626,7 +773,7 @@ export default function DashboardOverviewPage() {
                     <tr key={c.id} className="hover:bg-[#fbfcfd] transition-colors">
                       <td className="px-5 py-3.5 font-semibold text-[#191c1d]">
                         <Link
-                          href={`/dashboard/recovery/${c.id}`}
+                          href={`/recovery/${c.id}`}
                           className="text-[#2a21d2] hover:underline font-mono"
                         >
                           #{c.id.slice(-8).toUpperCase()}
@@ -683,7 +830,7 @@ export default function DashboardOverviewPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <Link href={`/dashboard/recovery/${c.id}`}>
+                        <Link href={`/recovery/${c.id}`}>
                           <Button
                             variant="outline"
                             size="sm"

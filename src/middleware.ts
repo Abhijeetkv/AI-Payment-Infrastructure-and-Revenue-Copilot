@@ -13,9 +13,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow static files and public pages
+  // Allow public auth pages and static assets
   if (
-    pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/_next") ||
@@ -24,13 +23,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // In production, verify session cookie for dashboard
-  // For development demo / sandbox, allow access while providing auth header context
+  // If auth is enforced, redirect unauthenticated requests to login
   const sessionToken =
     request.cookies.get("better-auth.session_token") ||
     request.cookies.get("__Secure-better-auth.session_token");
 
-  if (pathname.startsWith("/dashboard") && process.env.ENFORCE_AUTH === "true" && !sessionToken) {
+  if (process.env.ENFORCE_AUTH === "true" && !sessionToken) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);

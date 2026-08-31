@@ -151,14 +151,21 @@ export default function PaymentsPage() {
                 No Payments Ingested Yet
               </h3>
               <p className="text-xs text-[#444748] mt-1">
-                Create a test order from the Orders page or generate synthetic data in Settings.
+                Run failure simulations or seed 90-day transactions in Settings.
               </p>
             </div>
-            <Link href="/dashboard/orders">
-              <Button size="sm" className="h-8 text-xs bg-[#2a21d2] hover:bg-[#2a21d2]/90 text-white font-semibold">
-                Go to Orders
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/simulator">
+                <Button size="sm" className="h-8 text-xs bg-[#2a21d2] hover:bg-[#2a21d2]/90 text-white font-semibold">
+                  Launch Simulator
+                </Button>
+              </Link>
+              <Link href="/settings">
+                <Button size="sm" variant="outline" className="h-8 text-xs">
+                  Generate Seed Data
+                </Button>
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -211,7 +218,7 @@ export default function PaymentsPage() {
                     </td>
                     <td className="py-4 px-6 text-right">
                       <Link
-                        href={`/dashboard/payments/${p.id}`}
+                        href={`/payments/${p.id}`}
                         className="text-[#2a21d2] hover:underline font-semibold inline-flex items-center gap-1"
                       >
                         <span>Inspect</span>

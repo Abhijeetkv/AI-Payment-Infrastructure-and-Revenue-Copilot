@@ -175,7 +175,7 @@ export default function PaymentDetailPage() {
     return (
       <div className="p-12 text-center space-y-4">
         <div className="text-rose-400 text-sm">{error || "Payment not found"}</div>
-        <Link href="/dashboard/payments">
+        <Link href="/payments">
           <Button variant="outline" size="sm" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             <span>Back to Payments</span>
@@ -196,7 +196,7 @@ export default function PaymentDetailPage() {
     <div className="space-y-6">
       {/* Top Navigation */}
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/payments">
+        <Link href="/payments">
           <Button variant="ghost" size="sm" className="gap-2 text-zinc-400 hover:text-white">
             <ArrowLeft className="h-4 w-4" />
             <span>Back to Payments</span>

@@ -8,29 +8,25 @@ import {
   ShieldCheck,
   Zap,
   Activity,
-  CreditCard,
-  Receipt,
-  RotateCcw,
   Cpu,
   TrendingUp,
   Settings,
-  User,
-  ArrowLeftRight,
   LogOut,
+  Bot,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 
 const navigationItems = [
-  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Recovery Cases", href: "/dashboard/recovery", icon: ShieldCheck },
-  { name: "Campaigns", href: "/dashboard/recovery/campaigns", icon: Zap },
-  { name: "Agent Activity", href: "/dashboard/agent", icon: Activity },
-  { name: "Payments", href: "/dashboard/payments", icon: CreditCard },
-  { name: "Transactions", href: "/dashboard/transactions", icon: Receipt },
-  { name: "Refunds", href: "/dashboard/refunds", icon: RotateCcw },
-  { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp },
-  { name: "Simulator", href: "/dashboard/simulator", icon: Cpu },
+  { name: "Overview", href: "/", icon: LayoutDashboard },
+  { name: "Recovery Cases", href: "/recovery", icon: ShieldCheck },
+  { name: "AI Copilot", href: "/copilot", icon: Bot },
+  { name: "Agent Activity", href: "/agent", icon: Activity },
+  { name: "Campaigns", href: "/recovery/campaigns", icon: Zap },
+  { name: "Anomalies", href: "/anomalies", icon: AlertTriangle },
+  { name: "Analytics", href: "/analytics", icon: TrendingUp },
+  { name: "Simulator", href: "/simulator", icon: Cpu },
 ];
 
 export function DashboardSidebar() {
@@ -58,8 +54,8 @@ export function DashboardSidebar() {
       <div className="flex-1 flex flex-col gap-1">
         {navigationItems.map((item) => {
           const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
+            item.href === "/"
+              ? pathname === "/"
               : pathname.startsWith(item.href);
           const Icon = item.icon;
 
@@ -89,31 +85,12 @@ export function DashboardSidebar() {
       {/* Bottom Footer Navigation */}
       <div className="mt-auto flex flex-col gap-1 pt-4 border-t border-[#c7c4d8]">
         <Link
-          href="/dashboard/settings"
+          href="/settings"
           className="flex items-center gap-4 px-4 py-2 rounded-lg text-[#464555] hover:bg-[#f3f4f5] hover:text-[#191c1d] transition-colors duration-150 cursor-pointer text-sm"
         >
           <Settings className="h-5 w-5 shrink-0" />
           <span>Settings</span>
         </Link>
-
-        <Link
-          href="/dashboard/settings"
-          className="flex items-center gap-4 px-4 py-2 rounded-lg text-[#464555] hover:bg-[#f3f4f5] hover:text-[#191c1d] transition-colors duration-150 cursor-pointer text-sm"
-        >
-          <User className="h-5 w-5 shrink-0" />
-          <span>Profile</span>
-        </Link>
-
-        <button
-          type="button"
-          onClick={() => {
-            router.push("/dashboard");
-          }}
-          className="flex items-center gap-4 px-4 py-2 rounded-lg text-[#464555] hover:bg-[#f3f4f5] hover:text-[#191c1d] transition-colors duration-150 cursor-pointer border border-[#c7c4d8] mt-2 text-sm text-left"
-        >
-          <ArrowLeftRight className="h-5 w-5 shrink-0" />
-          <span>Switch Account</span>
-        </button>
 
         <button
           type="button"

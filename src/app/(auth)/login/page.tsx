@@ -31,7 +31,7 @@ export default function LoginPage() {
       if (result.error) {
         setError(result.error.message || "Failed to sign in. Please check credentials.");
       } else {
-        router.push("/dashboard");
+        router.push("/");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred";
@@ -118,7 +118,7 @@ export default function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/")}
               className="w-full border-[#c7c4d8] bg-[#f8f9fa] hover:bg-[#f3f4f5] text-[#191c1d] text-xs font-semibold h-9 gap-1.5 shadow-xs cursor-pointer"
             >
               <Sparkles className="h-3.5 w-3.5 text-[#2a21d2]" />

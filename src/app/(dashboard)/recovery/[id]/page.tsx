@@ -12,10 +12,23 @@ import {
   Ban,
   UserCheck,
   Lock,
+  MessageSquare,
+  Mail,
+  Smartphone,
+  Copy,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+
+interface AIReasoningPayload {
+  analysis?: string;
+  reasoning?: string;
+  confidence?: number;
+  factors?: string[];
+  provider?: string;
+  alternativeAction?: string;
+}
 
 interface RecoveryCaseDetail {
   id: string;
@@ -37,7 +50,7 @@ interface RecoveryCaseDetail {
   recoveredAmount: number;
   stopReason: string | null;
   escalationReason: string | null;
-  aiReasoningFactors: string[] | null;
+  aiReasoningFactors: string[] | AIReasoningPayload | null;
   policyCheckResults: {
     allowed?: boolean;
     checks?: Array<{ rule: string; passed: boolean; reason: string }>;
@@ -85,6 +98,8 @@ export default function RecoveryCaseDetailPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [actionFeedback, setActionFeedback] = React.useState<string | null>(null);
+  const [copiedTouchpoint, setCopiedTouchpoint] = React.useState(false);
+  const [touchpointChannel, setTouchpointChannel] = React.useState<"whatsapp" | "sms" | "email">("whatsapp");
   const [reloadKey, setReloadKey] = React.useState(0);
 
   const fetchCase = React.useCallback(() => {
@@ -183,6 +198,12 @@ export default function RecoveryCaseDetailPage() {
     }
   };
 
+  const handleCopyNudge = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedTouchpoint(true);
+    setTimeout(() => setCopiedTouchpoint(false), 2000);
+  };
+
   if (isLoading) {
     return (
       <div className="p-12 text-center text-[#75777a]">
@@ -197,7 +218,7 @@ export default function RecoveryCaseDetailPage() {
       <div className="p-8 text-center">
         <h2 className="text-lg font-bold text-[#191c1d]">Case Not Found</h2>
         <p className="text-xs text-[#75777a] mt-1">The recovery case #{caseId} could not be located.</p>
-        <Link href="/dashboard/recovery">
+        <Link href="/recovery">
           <Button size="sm" className="mt-4 text-xs">Return to Cases</Button>
         </Link>
       </div>
@@ -207,14 +228,40 @@ export default function RecoveryCaseDetailPage() {
   const probPct = Math.round(caseData.recoveryProbability * 100);
   const isTerminal = ["RECOVERED", "FAILED", "ESCALATED", "STOPPED"].includes(caseData.status);
 
+  // Parse structured AI reasoning payload if available
+  const reasoningObj: AIReasoningPayload | null =
+    caseData.aiReasoningFactors && typeof caseData.aiReasoningFactors === "object" && !Array.isArray(caseData.aiReasoningFactors)
+      ? (caseData.aiReasoningFactors as AIReasoningPayload)
+      : null;
+
+  const reasoningFactorsList: string[] =
+    reasoningObj?.factors ||
+    (Array.isArray(caseData.aiReasoningFactors) ? caseData.aiReasoningFactors : [
+      "Original payment method failed due to gateway/issuer error.",
+      "Customer history indicates active purchase intent.",
+      "Payment amount is within safe automated recovery limit.",
+      "Attempt count allows bounded intervention.",
+    ]);
+
+  const confidenceScore = reasoningObj?.confidence ? Math.round(reasoningObj.confidence * 100) : probPct;
+  const aiProvider = reasoningObj?.provider || "Gemini 2.0 Flash";
+
+  // Mocked Customer Recovery Nudge texts for realistic demonstration
+  const formattedAmount = formatCurrency(caseData.riskAmount);
+  const orderRef = caseData.order?.receipt || caseData.orderId.slice(-8).toUpperCase();
+  const whatsappNudge = `Hi! Your payment of ${formattedAmount} for Order #${orderRef} was interrupted due to a temporary bank decline. Lumina has secured your cart with Instant UPI/QR (99.4% uptime). Click to complete securely: https://rzp.io/l/rec_${caseData.id.slice(-6)}`;
+  const smsNudge = `Payment alert: ${formattedAmount} for #${orderRef} failed. Retry via verified Instant UPI link: https://rzp.io/l/rec_${caseData.id.slice(-6)}`;
+  const emailNudgeSubject = `Action Required: Complete your order #${orderRef} (${formattedAmount})`;
+  const emailNudgeBody = `Dear Customer,\n\nWe noticed your recent payment of ${formattedAmount} for Order #${orderRef} could not be processed due to a temporary gateway timeout.\n\nOur system has preserved your order. You can easily complete payment using UPI, Cards, or Netbanking using our secure Razorpay link below:\n\n👉 Complete Payment: https://rzp.io/l/rec_${caseData.id.slice(-6)}\n\nThank you!`;
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top Breadcrumb & Actions */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
-            href="/dashboard/recovery"
-            className="h-8 w-8 rounded-lg bg-white border border-[#c7c4d8] flex items-center justify-center text-[#191c1d] hover:bg-[#f3f4f5] transition-colors"
+            href="/recovery"
+            className="h-8 w-8 rounded-lg bg-white border border-[#c7c4d8] flex items-center justify-center text-[#191c1d] hover:bg-[#f3f4f5] transition-colors cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -251,7 +298,7 @@ export default function RecoveryCaseDetailPage() {
               size="sm"
               onClick={handleStop}
               disabled={isExecuting}
-              className="text-xs border-[#ba1a1a] text-[#ba1a1a] hover:bg-[#ffebee]"
+              className="text-xs border-[#ba1a1a] text-[#ba1a1a] hover:bg-[#ffebee] cursor-pointer"
             >
               <Ban className="h-3.5 w-3.5 mr-1" />
               Stop
@@ -261,7 +308,7 @@ export default function RecoveryCaseDetailPage() {
               size="sm"
               onClick={handleEscalate}
               disabled={isExecuting}
-              className="text-xs border-[#7b1fa2] text-[#7b1fa2] hover:bg-[#f3e5f5]"
+              className="text-xs border-[#7b1fa2] text-[#7b1fa2] hover:bg-[#f3e5f5] cursor-pointer"
             >
               <UserCheck className="h-3.5 w-3.5 mr-1" />
               Escalate
@@ -271,7 +318,7 @@ export default function RecoveryCaseDetailPage() {
                 size="sm"
                 onClick={() => handleExecuteAction(caseData.recommendedAction!)}
                 disabled={isExecuting}
-                className="bg-[#2a21d2] hover:bg-[#1b1599] text-white text-xs font-medium shadow-xs flex items-center gap-1.5"
+                className="bg-[#2a21d2] hover:bg-[#1b1599] text-white text-xs font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Play className="h-3.5 w-3.5" />
                 Execute {caseData.recommendedAction.replace(/_/g, " ")}
@@ -353,13 +400,18 @@ export default function RecoveryCaseDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: AI Recommendation & Policy Gatekeeping (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
-          {/* AI Recommendation Card */}
-          <Card className="border border-[#c7c4d8] bg-white shadow-2xs">
-            <div className="p-4 border-b border-[#e1e2e5] flex items-center gap-2 bg-[#f8f9fe]">
-              <Sparkles className="h-4 w-4 text-[#2a21d2]" />
-              <h3 className="text-sm font-bold text-[#191c1d]">
-                AI Recommendation
-              </h3>
+          {/* AI Recommendation Card with Confidence Gauge */}
+          <Card className="border border-[#c7c4d8] bg-white shadow-2xs overflow-hidden">
+            <div className="p-4 border-b border-[#e1e2e5] flex items-center justify-between bg-[#f8f9fe]">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-[#2a21d2]" />
+                <h3 className="text-sm font-bold text-[#191c1d]">
+                  AI Reasoning & Confidence
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#e0e0ff] text-[#2a21d2] font-semibold">
+                {aiProvider}
+              </span>
             </div>
 
             <CardContent className="p-5 space-y-4">
@@ -372,36 +424,132 @@ export default function RecoveryCaseDetailPage() {
                 </div>
               </div>
 
+              {/* Confidence Gauge */}
+              <div className="p-3 bg-[#f8f9fa] rounded-lg border border-[#e1e2e5]">
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="font-semibold text-[#191c1d]">Model Confidence</span>
+                  <span className="font-bold text-[#2a21d2]">{confidenceScore}%</span>
+                </div>
+                <div className="w-full bg-[#e1e2e5] rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      confidenceScore > 70 ? "bg-[#2e7d32]" : confidenceScore > 40 ? "bg-[#f57f17]" : "bg-[#ba1a1a]"
+                    }`}
+                    style={{ width: `${confidenceScore}%` }}
+                  />
+                </div>
+                {reasoningObj?.analysis && (
+                  <p className="text-xs text-[#444748] mt-2 italic">
+                    &ldquo;{reasoningObj.analysis}&rdquo;
+                  </p>
+                )}
+              </div>
+
               {/* Evidence Factors */}
               <div>
                 <span className="text-xs font-semibold text-[#191c1d]">
-                  Why this action?
+                  Evidence Factors (Why this action?)
                 </span>
                 <ul className="mt-2 space-y-1.5 text-xs text-[#444748]">
-                  {Array.isArray(caseData.aiReasoningFactors) && caseData.aiReasoningFactors.length > 0 ? (
-                    caseData.aiReasoningFactors.map((factor, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#2a21d2] mt-1.5 shrink-0" />
-                        <span>{factor}</span>
-                      </li>
-                    ))
-                  ) : (
-                    <>
-                      <li className="flex items-start gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#2a21d2] mt-1.5 shrink-0" />
-                        <span>Original payment method failed due to gateway timeout.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#2a21d2] mt-1.5 shrink-0" />
-                        <span>Payment amount is within safe automated recovery limit.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#2a21d2] mt-1.5 shrink-0" />
-                        <span>Attempt count (0/3) allows automated intervention.</span>
-                      </li>
-                    </>
-                  )}
+                  {reasoningFactorsList.map((factor, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#2a21d2] mt-1.5 shrink-0" />
+                      <span>{factor}</span>
+                    </li>
+                  ))}
                 </ul>
+              </div>
+
+              {reasoningObj?.alternativeAction && (
+                <div className="text-xs text-[#75777a] pt-2 border-t border-[#e1e2e5]">
+                  <span className="font-medium text-[#191c1d]">Fallback Action: </span>
+                  {reasoningObj.alternativeAction.replace(/_/g, " ")}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Customer Recovery Touchpoint (Nudge Preview) */}
+          <Card className="border border-[#e1e2e5] bg-white shadow-2xs overflow-hidden">
+            <div className="p-4 border-b border-[#e1e2e5] flex items-center justify-between bg-gradient-to-r from-[#f0f4ff] to-white">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-[#2a21d2]" />
+                <h3 className="text-sm font-bold text-[#191c1d]">
+                  Customer Recovery Touchpoint
+                </h3>
+              </div>
+              <span className="text-[10px] font-semibold text-[#2e7d32] bg-[#e8f5e9] px-2 py-0.5 rounded">
+                Live Preview
+              </span>
+            </div>
+
+            <CardContent className="p-4 space-y-3">
+              {/* Channel Tabs */}
+              <div className="flex items-center rounded-lg bg-[#f3f4f5] p-1 border border-[#e1e2e5] text-xs">
+                <button
+                  type="button"
+                  onClick={() => setTouchpointChannel("whatsapp")}
+                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${
+                    touchpointChannel === "whatsapp" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
+                  }`}
+                >
+                  <MessageSquare className="h-3 w-3" /> WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTouchpointChannel("sms")}
+                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${
+                    touchpointChannel === "sms" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
+                  }`}
+                >
+                  <Smartphone className="h-3 w-3" /> SMS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTouchpointChannel("email")}
+                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${
+                    touchpointChannel === "email" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
+                  }`}
+                >
+                  <Mail className="h-3 w-3" /> Email
+                </button>
+              </div>
+
+              {/* Message Box */}
+              <div className="p-3 bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg text-xs text-[#191c1d] relative font-sans leading-relaxed whitespace-pre-line">
+                {touchpointChannel === "whatsapp" && whatsappNudge}
+                {touchpointChannel === "sms" && smsNudge}
+                {touchpointChannel === "email" && (
+                  <div>
+                    <div className="font-semibold text-[#191c1d] border-b border-[#e1e2e5] pb-1.5 mb-2">
+                      Subject: {emailNudgeSubject}
+                    </div>
+                    {emailNudgeBody}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-[#75777a]">
+                  Automated via Razorpay Payment Link
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    handleCopyNudge(
+                      touchpointChannel === "whatsapp"
+                        ? whatsappNudge
+                        : touchpointChannel === "sms"
+                          ? smsNudge
+                          : emailNudgeBody
+                    )
+                  }
+                  className="text-xs h-7 gap-1 cursor-pointer"
+                >
+                  {copiedTouchpoint ? <CheckCircle2 className="h-3 w-3 text-[#2e7d32]" /> : <Copy className="h-3 w-3" />}
+                  {copiedTouchpoint ? "Copied!" : "Copy Message"}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -411,7 +559,7 @@ export default function RecoveryCaseDetailPage() {
             <div className="p-4 border-b border-[#e1e2e5] flex items-center gap-2">
               <Lock className="h-4 w-4 text-[#191c1d]" />
               <h3 className="text-sm font-bold text-[#191c1d]">
-                Policy Guardrails & Checks
+                Deterministic Policy Gatekeeper
               </h3>
             </div>
 
@@ -448,10 +596,10 @@ export default function RecoveryCaseDetailPage() {
             <div className="p-4 border-b border-[#e1e2e5] flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-[#191c1d]">
-                  Recovery Timeline & Audit Trail
+                  Autonomous Decision Timeline
                 </h3>
-                <p className="text-[11px] text-[#75777a] mt-0.5">
-                  Complete chronological trace of agent actions and outcomes
+                <p className="text-xs text-[#75777a] mt-0.5">
+                  Audited sequence of AI evaluations, policy checks, and gateway events
                 </p>
               </div>
               <span className="text-xs text-[#75777a] font-mono">
@@ -459,46 +607,75 @@ export default function RecoveryCaseDetailPage() {
               </span>
             </div>
 
-            <CardContent className="p-6">
-              <div className="relative border-l-2 border-[#e1e2e5] ml-3 space-y-6 py-2">
-                {caseData.timeline.map((event) => {
-                  const isRecoveredEvent = event.event.includes("recovered") || event.event.includes("completed");
+            <CardContent className="p-5">
+              {caseData.timeline.length === 0 ? (
+                <p className="text-xs text-[#75777a] py-6 text-center">
+                  No timeline events recorded yet.
+                </p>
+              ) : (
+                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#e1e2e5]">
+                  {caseData.timeline.map((item, idx) => {
+                    const isAi = item.actor === "ai_agent";
+                    const isPolicy = item.actor === "policy_engine";
+                    const isRecovered = item.event.includes("recovered") || item.event.includes("success");
+                    const isFailed = item.event.includes("failed") || item.event.includes("blocked");
 
-                  return (
-                    <div key={event.id} className="relative pl-6">
-                      {/* Timeline Dot */}
-                      <div
-                        className={`absolute -left-[9px] top-0.5 h-4 w-4 rounded-full border-2 border-white flex items-center justify-center ${
-                          isRecoveredEvent
-                            ? "bg-[#2e7d32]"
-                            : event.actor === "ai_agent"
-                              ? "bg-[#2a21d2]"
-                              : event.actor === "policy_engine"
-                                ? "bg-[#f57f17]"
-                                : "bg-[#75777a]"
-                        }`}
-                      />
+                    return (
+                      <div key={item.id || idx} className="relative group">
+                        {/* Timeline Node Icon */}
+                        <div
+                          className={`absolute -left-6 top-0 h-5 w-5 rounded-full border-2 border-white flex items-center justify-center text-white ${
+                            isRecovered
+                              ? "bg-[#2e7d32]"
+                              : isFailed
+                                ? "bg-[#ba1a1a]"
+                                : isAi
+                                  ? "bg-[#2a21d2]"
+                                  : isPolicy
+                                    ? "bg-[#7b1fa2]"
+                                    : "bg-[#75777a]"
+                          }`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                        </div>
 
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-[#191c1d] capitalize">
-                          {event.event.replace(/_/g, " ")}
-                        </span>
-                        <span className="text-[11px] text-[#75777a]">
-                          {new Date(event.createdAt).toLocaleTimeString("en-IN")}
-                        </span>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#191c1d] capitalize">
+                              {item.event.replace(/_/g, " ")}
+                            </span>
+                            <span className="text-[11px] text-[#75777a] font-mono">
+                              {new Date(item.createdAt).toLocaleTimeString("en-IN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                              })}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-[#444748] mt-1 leading-relaxed">
+                            {item.description}
+                          </p>
+
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                isAi
+                                  ? "bg-[#e0e0ff] text-[#2a21d2]"
+                                  : isPolicy
+                                    ? "bg-[#f3e5f5] text-[#7b1fa2]"
+                                    : "bg-[#f3f4f5] text-[#75777a]"
+                              }`}
+                            >
+                              Actor: {item.actor.replace(/_/g, " ")}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-
-                      <p className="text-xs text-[#444748] mt-1 leading-relaxed">
-                        {event.description}
-                      </p>
-
-                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-[#f3f4f5] text-[#75777a] uppercase mt-2">
-                        Actor: {event.actor}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -109,7 +109,7 @@ export default function RecoveryCasesPage() {
             Refresh
           </Button>
 
-          <Link href="/dashboard/recovery/campaigns">
+          <Link href="/recovery/campaigns">
             <Button
               size="sm"
               className="bg-[#2a21d2] hover:bg-[#1b1599] text-white flex items-center gap-1.5 text-xs font-medium shadow-xs"
@@ -209,7 +209,7 @@ export default function RecoveryCasesPage() {
                     <tr key={c.id} className="hover:bg-[#fbfcfd] transition-colors">
                       <td className="px-5 py-3.5 font-semibold text-[#191c1d]">
                         <Link
-                          href={`/dashboard/recovery/${c.id}`}
+                          href={`/recovery/${c.id}`}
                           className="text-[#2a21d2] hover:underline font-mono"
                         >
                           #{c.id.slice(-8).toUpperCase()}
@@ -271,7 +271,7 @@ export default function RecoveryCasesPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <Link href={`/dashboard/recovery/${c.id}`}>
+                        <Link href={`/recovery/${c.id}`}>
                           <Button
                             variant="outline"
                             size="sm"
