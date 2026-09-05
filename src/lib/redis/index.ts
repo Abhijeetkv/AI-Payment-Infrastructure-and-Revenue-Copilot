@@ -12,13 +12,14 @@ const redisOptions: RedisOptions = {
     }
     return Math.min(times * 100, 2000);
   },
-  lazyConnect: true,
-  enableOfflineQueue: false,
 };
 
 function createRedisClient(): Redis {
   const url = process.env.REDIS_URL || "redis://localhost:6379";
-  const client = new Redis(url, redisOptions);
+  const client = new Redis(url, {
+    ...redisOptions,
+    ...(url.startsWith("rediss://") ? { tls: { rejectUnauthorized: false } } : {}),
+  });
 
   client.on("error", (err) => {
     // Only log as warning to allow graceful fallback in development if Redis isn't running yet

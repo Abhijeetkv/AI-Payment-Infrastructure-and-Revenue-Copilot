@@ -168,11 +168,10 @@ export default function AgentActivityPage() {
                     </div>
                   )}
                   <div
-                    className={`p-3 rounded-lg max-w-[85%] whitespace-pre-wrap leading-relaxed ${
-                      msg.role === "user"
+                    className={`p-3 rounded-lg max-w-[85%] whitespace-pre-wrap leading-relaxed ${msg.role === "user"
                         ? "bg-[#2a21d2] text-white"
                         : "bg-[#f3f4f5] text-[#191c1d] border border-[#e1e2e5]"
-                    }`}
+                      }`}
                   >
                     {msg.text}
                   </div>
@@ -243,15 +242,14 @@ export default function AgentActivityPage() {
                     return (
                       <div key={act.id} className="relative pl-5">
                         <div
-                          className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white ${
-                            isRecovered
+                          className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white ${isRecovered
                               ? "bg-[#2e7d32]"
                               : isAgent
                                 ? "bg-[#2a21d2]"
                                 : isPolicy
                                   ? "bg-[#f57f17]"
                                   : "bg-[#75777a]"
-                          }`}
+                            }`}
                         />
 
                         <div className="flex items-center justify-between gap-2">

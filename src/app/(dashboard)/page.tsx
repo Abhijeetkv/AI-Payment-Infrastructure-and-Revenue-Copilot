@@ -11,9 +11,6 @@ import {
   RefreshCw,
   Activity,
   ChevronRight,
-  ShieldCheck,
-  Filter,
-  XCircle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -176,21 +173,57 @@ export default function DashboardOverviewPage() {
         ? chartData30d
         : chartData90d;
 
-  // Breakdown data for the bar chart
-  const breakdownData = (metrics?.byFailureType || []).map((item) => ({
-    name: item.failureType.replace(/_/g, " "),
-    risk: item.riskAmount / 100,
-    recovered: item.recoveredAmount / 100,
-  }));
+  // Format failure category names into Title Case
+  const formatCategoryName = (type: string) => {
+    const map: Record<string, string> = {
+      payment_failure: "Payment Failure",
+      checkout_drop_off: "Checkout Drop-off",
+      upi_degradation: "UPI Degradation",
+      card_decline: "Card Decline",
+      repeated_failure: "Repeated Failure",
+      network_timeout: "Network Timeout",
+      insufficient_funds: "Insufficient Funds",
+    };
+    const key = type.toLowerCase().replace(/\s+/g, "_");
+    return map[key] || type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
-  const defaultBreakdown = [
-    { name: "Payment Failure", risk: 240000, recovered: 165000 },
-    { name: "Checkout Drop-off", risk: 120000, recovered: 72000 },
-    { name: "UPI Degradation", risk: 85000, recovered: 59000 },
-    { name: "Card Decline", risk: 45000, recovered: 28000 },
+  // Standard failure categories taxonomy
+  const standardCategories = [
+    { key: "payment_failure", name: "Payment Failure", defaultRisk: 240000, defaultRecovered: 165000 },
+    { key: "checkout_drop_off", name: "Checkout Drop-off", defaultRisk: 120000, defaultRecovered: 72000 },
+    { key: "upi_degradation", name: "UPI Degradation", defaultRisk: 85000, defaultRecovered: 59000 },
+    { key: "card_decline", name: "Card Decline", defaultRisk: 45000, defaultRecovered: 28000 },
   ];
 
-  const displayBreakdown = breakdownData.length > 0 ? breakdownData : defaultBreakdown;
+  // Map and merge live database metrics with standard categories taxonomy
+  const standardResults = standardCategories.map((cat) => {
+    const liveItem = (metrics?.byFailureType || []).find(
+      (item) => item.failureType.toLowerCase().replace(/[\s_]+/g, "") === cat.key.replace(/[\s_]+/g, "")
+    );
+
+    return {
+      name: cat.name,
+      risk: liveItem ? liveItem.riskAmount / 100 : (metrics ? 0 : cat.defaultRisk),
+      recovered: liveItem ? liveItem.recoveredAmount / 100 : (metrics ? 0 : cat.defaultRecovered),
+    };
+  });
+
+  // Any additional dynamic categories from DB
+  const extraResults = (metrics?.byFailureType || [])
+    .filter(
+      (item) =>
+        !standardCategories.some(
+          (cat) => cat.key.replace(/[\s_]+/g, "") === item.failureType.toLowerCase().replace(/[\s_]+/g, "")
+        )
+    )
+    .map((item) => ({
+      name: formatCategoryName(item.failureType),
+      risk: item.riskAmount / 100,
+      recovered: item.recoveredAmount / 100,
+    }));
+
+  const displayBreakdown = [...standardResults, ...extraResults];
 
   // Formatted KPI numbers
   const revAtRisk = metrics?.revenueAtRisk ?? 48200000;
@@ -352,196 +385,6 @@ export default function DashboardOverviewPage() {
         </Card>
       </div>
 
-      {/* 🚀 Autonomous Recovery Funnel Visualization */}
-      <Card className="border border-[#c7c4d8] bg-white shadow-xs overflow-hidden">
-        <div className="p-4 bg-gradient-to-r from-[#f8f9fe] to-white border-b border-[#e1e2e5] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-[#2a21d2]" />
-              <h3 className="text-sm font-bold text-[#191c1d]">
-                Autonomous Recovery Funnel Pipeline
-              </h3>
-            </div>
-            <p className="text-xs text-[#75777a] mt-0.5">
-              Live conversion of failed transactions across Lumina&apos;s 5-stage bounded AI pipeline
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#e8f5e9] text-[#2e7d32]">
-            <CheckCircle2 className="h-3 w-3" /> {recRate}% End-to-End Conversion
-          </span>
-        </div>
-
-        <CardContent className="p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 relative">
-            {/* Stage 1: Detected */}
-            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
-                  <span>1. Detected</span>
-                  <span className="text-[#ba1a1a] font-semibold">100%</span>
-                </div>
-                <div className="text-lg font-bold text-[#191c1d] mt-1.5">
-                  {formatCurrency(revAtRisk)}
-                </div>
-                <div className="text-[11px] text-[#75777a] mt-0.5">
-                  {metrics?.totalCases ?? 32} total failure events
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#444748]">
-                Razorpay Webhook trigger
-              </div>
-            </div>
-
-            {/* Stage 2: AI Reasoning */}
-            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
-                  <span>2. AI Reasoned</span>
-                  <span className="text-[#2a21d2] font-semibold">96%</span>
-                </div>
-                <div className="text-lg font-bold text-[#2a21d2] mt-1.5">
-                  {formatCurrency(expRecovery)}
-                </div>
-                <div className="text-[11px] text-[#75777a] mt-0.5">
-                  Gemini / OpenAI Analysis
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#444748]">
-                Customer & route analysis
-              </div>
-            </div>
-
-            {/* Stage 3: Policy Guarded */}
-            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
-                  <span>3. Policy Gate</span>
-                  <span className="text-[#2e7d32] font-semibold">100%</span>
-                </div>
-                <div className="text-lg font-bold text-[#191c1d] mt-1.5">
-                  Deterministic
-                </div>
-                <div className="text-[11px] text-[#75777a] mt-0.5">
-                  5/5 Safety Guardrails
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#2e7d32] font-medium">
-                0 runaway retries allowed
-              </div>
-            </div>
-
-            {/* Stage 4: Workflow Execution */}
-            <div className="bg-[#f8f9fa] border border-[#e1e2e5] rounded-lg p-3.5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between text-xs text-[#75777a] font-medium">
-                  <span>4. Executing</span>
-                  <span className="text-[#7b1fa2] font-semibold">{actCases} active</span>
-                </div>
-                <div className="text-lg font-bold text-[#4a148c] mt-1.5">
-                  Inngest Step
-                </div>
-                <div className="text-[11px] text-[#75777a] mt-0.5">
-                  Durable async runner
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-[#e1e2e5] text-[10px] text-[#444748]">
-                Retry & Alternate Methods
-              </div>
-            </div>
-
-            {/* Stage 5: Recovered */}
-            <div className="bg-[#e8f5e9]/50 border border-[#a5d6a7] rounded-lg p-3.5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between text-xs text-[#2e7d32] font-bold">
-                  <span>5. Recovered</span>
-                  <span>{recRate}%</span>
-                </div>
-                <div className="text-lg font-bold text-[#1b5e20] mt-1.5">
-                  {formatCurrency(actRecovered)}
-                </div>
-                <div className="text-[11px] text-[#2e7d32] mt-0.5">
-                  {metrics?.recoveredCases ?? 22} cases credited
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-[#a5d6a7] text-[10px] text-[#1b5e20] font-semibold flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Ledger Invariance Verified
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ⚖️ "Without Lumina vs With Lumina" ROI Impact Comparison Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Without Lumina */}
-        <Card className="border border-[#ffcdd2] bg-[#fffbfb] shadow-2xs">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between border-b border-[#ffebee] pb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-[#ffebee] flex items-center justify-center text-[#ba1a1a]">
-                  <XCircle className="h-4 w-4" />
-                </div>
-                <h4 className="text-sm font-bold text-[#ba1a1a]">
-                  Without Lumina AI Recovery
-                </h4>
-              </div>
-              <span className="text-[11px] font-semibold text-[#ba1a1a] bg-[#ffebee] px-2 py-0.5 rounded">
-                Traditional Passive Setup
-              </span>
-            </div>
-
-            <div className="space-y-3 mt-3.5 text-xs text-[#444748]">
-              <div className="flex items-start gap-2">
-                <span className="text-[#ba1a1a] font-bold">✕</span>
-                <span><strong>100% Revenue Loss on Failures</strong>: {formatCurrency(revAtRisk)} lost permanently when customers abandon checkout.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-[#ba1a1a] font-bold">✕</span>
-                <span><strong>Blind Gateway Drops</strong>: No automatic route fallback when UPI or card gateways experience intermittent downtime.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-[#ba1a1a] font-bold">✕</span>
-                <span><strong>Zero Intelligent Timing</strong>: Manual retries trigger customer frustration and repeated bank decline penalties.</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* With Lumina */}
-        <Card className="border border-[#a5d6a7] bg-[#fafffa] shadow-2xs">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between border-b border-[#e8f5e9] pb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-[#e8f5e9] flex items-center justify-center text-[#2e7d32]">
-                  <ShieldCheck className="h-4 w-4" />
-                </div>
-                <h4 className="text-sm font-bold text-[#1b5e20]">
-                  With Lumina Autonomous Agent
-                </h4>
-              </div>
-              <span className="text-[11px] font-semibold text-[#2e7d32] bg-[#e8f5e9] px-2 py-0.5 rounded">
-                Autonomous Revenue Recaptured
-              </span>
-            </div>
-
-            <div className="space-y-3 mt-3.5 text-xs text-[#444748]">
-              <div className="flex items-start gap-2">
-                <span className="text-[#2e7d32] font-bold">✓</span>
-                <span><strong>{formatCurrency(actRecovered)} Money Back in Ledger</strong>: {recRate}% recovery rate achieved without any merchant manual effort.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-[#2e7d32] font-bold">✓</span>
-                <span><strong>Bounded Policy Safety</strong>: 5 deterministic guardrails ensure 0 runaway retries and strict amount limits.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-[#2e7d32] font-bold">✓</span>
-                <span><strong>Intelligent Alternative Routing</strong>: Instant QR & UPI nudges convert high-risk drop-offs with 88.4% success.</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Charts Section: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Chart: Revenue at Risk vs Recovered Over Time (2 cols) */}
@@ -563,11 +406,10 @@ export default function DashboardOverviewPage() {
                   key={t}
                   type="button"
                   onClick={() => setTimeRange(t)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    timeRange === t
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${timeRange === t
                       ? "bg-white text-[#2a21d2] shadow-xs"
                       : "text-[#75777a] hover:text-[#191c1d]"
-                  }`}
+                    }`}
                 >
                   {t.toUpperCase()}
                 </button>
@@ -794,13 +636,12 @@ export default function DashboardOverviewPage() {
                         <div className="flex items-center gap-2">
                           <div className="w-14 bg-[#e1e2e5] rounded-full h-1.5 overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${
-                                probPct > 70
+                              className={`h-full rounded-full ${probPct > 70
                                   ? "bg-[#2e7d32]"
                                   : probPct > 40
                                     ? "bg-[#f57f17]"
                                     : "bg-[#ba1a1a]"
-                              }`}
+                                }`}
                               style={{ width: `${probPct}%` }}
                             />
                           </div>
@@ -816,15 +657,14 @@ export default function DashboardOverviewPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            isRecovered
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${isRecovered
                               ? "bg-[#e8f5e9] text-[#2e7d32]"
                               : isExecuting
                                 ? "bg-[#e0e0ff] text-[#2a21d2]"
                                 : c.status === "FAILED"
                                   ? "bg-[#ffebee] text-[#ba1a1a]"
                                   : "bg-[#fff8e1] text-[#f57f17]"
-                          }`}
+                            }`}
                         >
                           {c.status}
                         </span>

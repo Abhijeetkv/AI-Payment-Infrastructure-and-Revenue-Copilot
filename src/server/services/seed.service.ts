@@ -237,14 +237,14 @@ export class SeedService {
               },
               ...(isRecovered
                 ? [
-                    {
-                      recoveryCaseId: recoveryCase.id,
-                      event: "recovery_completed",
-                      description: `₹${(amount / 100).toLocaleString("en-IN")} successfully recovered via ${recAction.replace(/_/g, " ").toLowerCase()}`,
-                      actor: "system",
-                      createdAt: new Date(txTime.getTime() + 15 * 60 * 1000),
-                    },
-                  ]
+                  {
+                    recoveryCaseId: recoveryCase.id,
+                    event: "recovery_completed",
+                    description: `₹${(amount / 100).toLocaleString("en-IN")} successfully recovered via ${recAction.replace(/_/g, " ").toLowerCase()}`,
+                    actor: "system",
+                    createdAt: new Date(txTime.getTime() + 15 * 60 * 1000),
+                  },
+                ]
                 : []),
             ],
           });

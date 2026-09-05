@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Payment Infrastructure & Revenue Copilot",
-  description: "Enterprise payment orchestration, webhook reliability, and AI revenue intelligence",
+  title: "Lumina — AI Revenue Recovery Agent",
+  description: "Autonomous revenue recovery, deterministic policy gatekeeping, and double-entry payment infrastructure for Razorpay",
 };
 
 export default function RootLayout({

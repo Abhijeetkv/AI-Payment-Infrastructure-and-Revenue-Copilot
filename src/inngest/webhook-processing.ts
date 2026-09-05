@@ -157,6 +157,7 @@ export const processWebhook = inngest.createFunction(
               OR: [
                 { paymentId: payment.id },
                 { orderId: payment.orderId },
+                { actions: { some: { newOrderId: payment.orderId } } },
               ],
               status: {
                 in: ["DETECTED", "ANALYZING", "ACTION_PENDING", "EXECUTING"],

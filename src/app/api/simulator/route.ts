@@ -6,11 +6,14 @@ import { z } from "zod";
 
 const simulationSchema = z.object({
   scenario: z.enum([
+    "PAYMENT_FAILURE_RECOVERY",
+    "UPI_DEGRADATION_RECOVERY",
+    "REPEATED_FAILURE_ESCALATION",
     "NETWORK_TIMEOUT",
     "BANK_DECLINE",
     "WEBHOOK_HMAC_TAMPER",
     "WEBHOOK_DEDUPLICATION_REPLAY",
-    "CONCURRENT_REFUND_RACE",
+    "CONCURRENT_RECOVERY_RACE",
   ]),
 });
 

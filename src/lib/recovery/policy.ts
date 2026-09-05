@@ -7,10 +7,11 @@ import type { RecoveryPolicyConfig } from "./types";
  */
 export const DEFAULT_RECOVERY_POLICY: RecoveryPolicyConfig = {
   maxAttempts: 3,
-  maxRecoveryAmountPaise: 10000000, // ₹1,00,000
-  minRecoveryProbability: 0.15,      // 15% minimum
-  retryDelayMinutes: 30,
-  expirationHours: 72,              // 3 days
+  maxRecoveryAmountPaise: 10000000, // ₹1,00,000 maximum allowable
+  minRecoveryProbability: 0.15,      // 15% minimum probability
+  retryDelayMinutes: 30,             // Cooldown between retries
+  expirationHours: 72,              // 3 days window
+  highValueApprovalThresholdPaise: 5000000, // ₹50,000 requires merchant approval
   allowedActions: [
     RecoveryActionType.PAYMENT_RETRY,
     RecoveryActionType.ALTERNATE_METHOD,

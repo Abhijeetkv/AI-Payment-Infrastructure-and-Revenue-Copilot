@@ -271,15 +271,14 @@ export default function RecoveryCaseDetailPage() {
                 Recovery Case #{caseData.id.slice(-8).toUpperCase()}
               </h1>
               <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  caseData.status === "RECOVERED"
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${caseData.status === "RECOVERED"
                     ? "bg-[#e8f5e9] text-[#2e7d32]"
                     : caseData.status === "EXECUTING"
                       ? "bg-[#e0e0ff] text-[#2a21d2]"
                       : caseData.status === "FAILED"
                         ? "bg-[#ffebee] text-[#ba1a1a]"
                         : "bg-[#fff8e1] text-[#f57f17]"
-                }`}
+                  }`}
               >
                 {caseData.status}
               </span>
@@ -432,9 +431,8 @@ export default function RecoveryCaseDetailPage() {
                 </div>
                 <div className="w-full bg-[#e1e2e5] rounded-full h-2 overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${
-                      confidenceScore > 70 ? "bg-[#2e7d32]" : confidenceScore > 40 ? "bg-[#f57f17]" : "bg-[#ba1a1a]"
-                    }`}
+                    className={`h-full rounded-full transition-all ${confidenceScore > 70 ? "bg-[#2e7d32]" : confidenceScore > 40 ? "bg-[#f57f17]" : "bg-[#ba1a1a]"
+                      }`}
                     style={{ width: `${confidenceScore}%` }}
                   />
                 </div>
@@ -489,27 +487,24 @@ export default function RecoveryCaseDetailPage() {
                 <button
                   type="button"
                   onClick={() => setTouchpointChannel("whatsapp")}
-                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${
-                    touchpointChannel === "whatsapp" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
-                  }`}
+                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${touchpointChannel === "whatsapp" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
+                    }`}
                 >
                   <MessageSquare className="h-3 w-3" /> WhatsApp
                 </button>
                 <button
                   type="button"
                   onClick={() => setTouchpointChannel("sms")}
-                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${
-                    touchpointChannel === "sms" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
-                  }`}
+                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${touchpointChannel === "sms" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
+                    }`}
                 >
                   <Smartphone className="h-3 w-3" /> SMS
                 </button>
                 <button
                   type="button"
                   onClick={() => setTouchpointChannel("email")}
-                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${
-                    touchpointChannel === "email" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
-                  }`}
+                  className={`flex-1 py-1 px-2 rounded font-medium flex items-center justify-center gap-1 cursor-pointer ${touchpointChannel === "email" ? "bg-white text-[#2a21d2] shadow-xs font-bold" : "text-[#75777a]"
+                    }`}
                 >
                   <Mail className="h-3 w-3" /> Email
                 </button>
@@ -624,8 +619,7 @@ export default function RecoveryCaseDetailPage() {
                       <div key={item.id || idx} className="relative group">
                         {/* Timeline Node Icon */}
                         <div
-                          className={`absolute -left-6 top-0 h-5 w-5 rounded-full border-2 border-white flex items-center justify-center text-white ${
-                            isRecovered
+                          className={`absolute -left-6 top-0 h-5 w-5 rounded-full border-2 border-white flex items-center justify-center text-white ${isRecovered
                               ? "bg-[#2e7d32]"
                               : isFailed
                                 ? "bg-[#ba1a1a]"
@@ -634,7 +628,7 @@ export default function RecoveryCaseDetailPage() {
                                   : isPolicy
                                     ? "bg-[#7b1fa2]"
                                     : "bg-[#75777a]"
-                          }`}
+                            }`}
                         >
                           <span className="h-1.5 w-1.5 rounded-full bg-white" />
                         </div>
@@ -659,13 +653,12 @@ export default function RecoveryCaseDetailPage() {
 
                           <div className="flex items-center gap-2 mt-1.5">
                             <span
-                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                                isAi
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${isAi
                                   ? "bg-[#e0e0ff] text-[#2a21d2]"
                                   : isPolicy
                                     ? "bg-[#f3e5f5] text-[#7b1fa2]"
                                     : "bg-[#f3f4f5] text-[#75777a]"
-                              }`}
+                                }`}
                             >
                               Actor: {item.actor.replace(/_/g, " ")}
                             </span>

@@ -2,9 +2,105 @@ import {
   RecoveryCaseStatus,
   RecoveryActionType,
   RecoveryStopReason,
+  PaymentStatus,
 } from "@prisma/client";
 
-// ─── Recovery Case Types ─────────────────────────────
+// ─── Trusted Snapshot Type ───────────────────────────
+
+export interface TrustedFinancialSnapshot {
+  paymentId: string;
+  orderId: string;
+  merchantId: string;
+  actualAmountPaise: number;
+  currency: string;
+  actualPaymentStatus: PaymentStatus | string;
+  actualAttemptCount: number;
+  maxAllowedAttempts: number;
+  caseCreatedAt: Date;
+  lastActionExecutedAt: Date | null;
+  hasActiveExecutingAction: boolean;
+  hasPreviousRecoveryCredit: boolean;
+}
+
+// ─── AI Advisory Types (Untrusted) ───────────────────
+
+export interface AIRecommendation {
+  analysis: string;
+  recommendedAction: RecoveryActionType;
+  confidence: number; // 0.0 - 1.0
+  reasoning: string;
+  evidenceFactors: string[];
+  alternativeAction?: RecoveryActionType;
+  provider: "gemini" | "openai" | "deterministic_engine";
+  generatedAt: Date;
+  rawAnalysis?: string;
+}
+
+// ─── Policy Engine Types (Deterministic Gatekeeper) ──
+
+export interface PolicyCheck {
+  rule: string;
+  passed: boolean;
+  reason: string;
+}
+
+export interface PolicyValidationResult {
+  allowed: boolean;
+  checks: PolicyCheck[];
+  reasons: string[];
+  blockingRule?: string;
+}
+
+export interface PolicyDecision {
+  allowed: boolean;
+  action: RecoveryActionType;
+  reasons: string[];
+  checks: PolicyCheck[];
+  blockingRule?: string;
+  requiresMerchantApproval: boolean;
+  evaluatedAt: Date;
+  trustedSnapshot: TrustedFinancialSnapshot;
+}
+
+export interface RecoveryPolicyConfig {
+  maxAttempts: number;
+  maxRecoveryAmountPaise: number;
+  minRecoveryProbability: number;
+  retryDelayMinutes: number;
+  expirationHours: number;
+  allowedActions: RecoveryActionType[];
+  highValueApprovalThresholdPaise: number;
+}
+
+// ─── Recovery Command (Validated Execution Payload) ──
+
+export interface RecoveryCommand {
+  commandId: string;
+  recoveryCaseId: string;
+  merchantId: string;
+  validatedAction: RecoveryActionType;
+  attemptNumber: number;
+  authorizedAmountPaise: number;
+  currency: string;
+  policyDecision: PolicyDecision;
+  dispatchedAt: Date;
+}
+
+// ─── Recovery Result (Verified Outcome) ──────────────
+
+export interface RecoveryResult {
+  recoveryCaseId: string;
+  actionId: string;
+  status: "SUCCESS" | "FAILED" | "BLOCKED" | "AWAITING_PAYMENT";
+  recoveredAmountPaise: number;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  verifiedVia: "webhook" | "direct_api" | "simulation";
+  completedAt: Date;
+  error?: string;
+}
+
+// ─── Recovery Case Models & DTOs ────────────────────
 
 export interface RecoveryCaseCreateInput {
   merchantId: string;
@@ -133,30 +229,6 @@ export interface ActionBreakdown {
   successRate: number;
 }
 
-// ─── Policy Types ───────────────────────────────────
-
-export interface PolicyCheck {
-  rule: string;
-  passed: boolean;
-  reason: string;
-}
-
-export interface PolicyValidationResult {
-  allowed: boolean;
-  checks: PolicyCheck[];
-  reasons: string[];     // Human-readable reasons for rejection
-  blockingRule?: string;  // Which rule blocked the action
-}
-
-export interface RecoveryPolicyConfig {
-  maxAttempts: number;
-  maxRecoveryAmountPaise: number;
-  minRecoveryProbability: number;
-  retryDelayMinutes: number;
-  expirationHours: number;
-  allowedActions: RecoveryActionType[];
-}
-
 // ─── Agent Activity Types ───────────────────────────
 
 export interface AgentActivityItem {
@@ -188,4 +260,5 @@ export {
   RecoveryCaseStatus,
   RecoveryActionType,
   RecoveryStopReason,
+  PaymentStatus,
 };

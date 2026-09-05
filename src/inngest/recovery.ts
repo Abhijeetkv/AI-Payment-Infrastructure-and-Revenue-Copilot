@@ -9,7 +9,7 @@ import {
 } from "@prisma/client";
 import { RevenueRiskService } from "@/server/services/revenue-risk.service";
 import { RecoveryPolicyService } from "@/server/services/recovery-policy.service";
-import { LedgerService } from "@/lib/transactions/ledger";
+import { RecoveryService } from "@/server/services/recovery.service";
 import { AuditService } from "@/server/services/audit.service";
 import { createRazorpayOrder } from "@/lib/razorpay/orders";
 import { generateRecoveryCaseAnalysis } from "@/lib/ai/client";
@@ -22,11 +22,11 @@ interface StepTools {
 
 /**
  * Process a newly created recovery case:
- * 1. Analyze the case
- * 2. Determine recommended action
- * 3. Validate against policy
- * 4. Execute action
- * 5. Check outcome
+ * 1. Analyze case from trusted database telemetry
+ * 2. Get untrusted AI advisory recommendation
+ * 3. Validate against deterministic Policy Engine
+ * 4. Execute action via bounded Recovery Command
+ * 5. Outcome verification (webhook / simulation)
  */
 export const processRecoveryCase = inngest.createFunction(
   {
@@ -43,7 +43,7 @@ export const processRecoveryCase = inngest.createFunction(
   }) => {
     const { recoveryCaseId, merchantId } = event.data;
 
-    // Step 1: Analyze the recovery case
+    // Step 1: Deterministic Analysis from database
     const analysis = await step.run("analyze-recovery-case", async () => {
       const recoveryCase = await db.recoveryCase.findUnique({
         where: { id: recoveryCaseId },
@@ -64,16 +64,16 @@ export const processRecoveryCase = inngest.createFunction(
         data: {
           recoveryCaseId,
           event: "analysis_started",
-          description: "AI agent analyzing payment failure and customer history",
+          description: "AI agent analyzing payment failure telemetry and historical route conversion",
           actor: "ai_agent",
         },
       });
 
-      // Calculate recovery probability
+      // Calculate recovery probability deterministically
       const { probability, expectedRecoveryAmount, factors } =
         await RevenueRiskService.calculateRecoveryProbability(merchantId, recoveryCase.paymentId);
 
-      // Update case with probability
+      // Update case with calculated probability
       await db.recoveryCase.update({
         where: { id: recoveryCaseId },
         data: {
@@ -87,7 +87,7 @@ export const processRecoveryCase = inngest.createFunction(
 
       return {
         caseId: recoveryCaseId,
-        paymentMethod: recoveryCase.payment?.paymentMethod,
+        paymentMethod: recoveryCase.payment?.paymentMethod || recoveryCase.paymentMethod,
         amount: recoveryCase.riskAmount,
         probability,
         factors,
@@ -97,9 +97,9 @@ export const processRecoveryCase = inngest.createFunction(
       };
     });
 
-    // Step 2: Determine recommended action via AI Reasoning
+    // Step 2: Request Untrusted AI Advisory Recommendation
     const recommendation = await step.run("determine-recovery-action", async () => {
-      const aiAnalysis = await generateRecoveryCaseAnalysis({
+      const aiRecommendation = await generateRecoveryCaseAnalysis({
         caseId: recoveryCaseId,
         merchantId,
         riskAmount: analysis.amount,
@@ -112,95 +112,29 @@ export const processRecoveryCase = inngest.createFunction(
         methodPerformance: analysis.methodPerformance,
       });
 
-      const recommendedAction = aiAnalysis.recommendedAction;
-      const evidenceFactors = [
-        ...aiAnalysis.evidenceFactors,
-        `AI Confidence: ${Math.round(aiAnalysis.confidence * 100)}% (${aiAnalysis.provider})`,
-      ];
+      // Record advisory recommendation into database
+      await RecoveryService.recordAIRecommendation(recoveryCaseId, aiRecommendation);
 
-      // Update case with recommendation and structured AI reasoning
-      await db.recoveryCase.update({
-        where: { id: recoveryCaseId },
-        data: {
-          recommendedAction,
-          status: RecoveryCaseStatus.ACTION_PENDING,
-          aiReasoningFactors: {
-            analysis: aiAnalysis.analysis,
-            reasoning: aiAnalysis.reasoning,
-            confidence: aiAnalysis.confidence,
-            factors: evidenceFactors,
-            provider: aiAnalysis.provider,
-            alternativeAction: aiAnalysis.alternativeAction,
-          } as unknown as Prisma.InputJsonValue,
-        },
-      });
-
-      await db.recoveryTimeline.create({
-        data: {
-          recoveryCaseId,
-          event: "ai_recommendation",
-          description: `AI recommended: ${recommendedAction.replace(/_/g, " ").toLowerCase()} (${aiAnalysis.provider})`,
-          actor: "ai_agent",
-          metadata: {
-            action: recommendedAction,
-            factors: evidenceFactors,
-            reasoning: aiAnalysis.reasoning,
-            provider: aiAnalysis.provider,
-          } as unknown as Prisma.InputJsonValue,
-        },
-      });
-
-      return {
-        recommendedAction: recommendedAction as RecoveryActionType,
-        evidenceFactors,
-        reasoning: aiAnalysis.reasoning,
-        provider: aiAnalysis.provider,
-      };
+      return aiRecommendation;
     });
 
-    // Step 3: Validate against policy
-    const policyResult = await step.run("validate-recovery-policy", async () => {
-      const recoveryCase = await db.recoveryCase.findUnique({
-        where: { id: recoveryCaseId },
-        include: { payment: true },
-      });
-
-      if (!recoveryCase) throw new Error("Case not found");
-
-      const result = await RecoveryPolicyService.validateAction(
-        recoveryCase,
-        recommendation.recommendedAction
+    // Step 3: Independently validate against deterministic Policy Engine
+    const policyDecision = await step.run("validate-recovery-policy", async () => {
+      return RecoveryPolicyService.evaluateCase(
+        merchantId,
+        recoveryCaseId,
+        recommendation
       );
-
-      await db.recoveryTimeline.create({
-        data: {
-          recoveryCaseId,
-          event: "policy_validated",
-          description: result.allowed
-            ? "All policy checks passed"
-            : `Policy blocked: ${result.reasons.join(", ")}`,
-          actor: "policy_engine",
-          metadata: result as unknown as Prisma.InputJsonValue,
-        },
-      });
-
-      await db.recoveryCase.update({
-        where: { id: recoveryCaseId },
-        data: { policyCheckResults: result as unknown as Prisma.InputJsonValue },
-      });
-
-      return result;
     });
 
-    // Step 4: Execute or escalate
-    if (!policyResult.allowed) {
-      // Policy blocked — escalate
+    // Step 4: Handle Policy Decision
+    if (!policyDecision.allowed) {
       await step.run("escalate-blocked-case", async () => {
         await db.recoveryCase.update({
           where: { id: recoveryCaseId },
           data: {
             status: RecoveryCaseStatus.ESCALATED,
-            escalationReason: `Policy blocked: ${policyResult.reasons.join(", ")}`,
+            escalationReason: `Policy blocked: ${policyDecision.reasons.join(", ")}`,
             resolvedAt: new Date(),
           },
         });
@@ -209,14 +143,37 @@ export const processRecoveryCase = inngest.createFunction(
           data: {
             recoveryCaseId,
             event: "case_escalated",
-            description: `Escalated: policy engine blocked recovery action`,
-            actor: "system",
-            metadata: policyResult as unknown as Prisma.InputJsonValue,
+            description: `Escalated: policy engine blocked action (${policyDecision.reasons.join(", ")})`,
+            actor: "policy_engine",
+            metadata: policyDecision as unknown as Prisma.InputJsonValue,
           },
         });
       });
 
-      return { status: "escalated", reason: policyResult.reasons };
+      return { status: "escalated", reason: policyDecision.reasons };
+    }
+
+    if (policyDecision.requiresMerchantApproval) {
+      await step.run("escalate-high-value-approval", async () => {
+        await db.recoveryCase.update({
+          where: { id: recoveryCaseId },
+          data: {
+            status: RecoveryCaseStatus.ESCALATED,
+            escalationReason: "High-value recovery requires merchant confirmation",
+          },
+        });
+
+        await db.recoveryTimeline.create({
+          data: {
+            recoveryCaseId,
+            event: "escalated_for_approval",
+            description: `High-value transaction (₹${(policyDecision.trustedSnapshot.actualAmountPaise / 100).toLocaleString("en-IN")}) requires manual merchant confirmation`,
+            actor: "policy_engine",
+          },
+        });
+      });
+
+      return { status: "escalated_for_approval" };
     }
 
     // If Scheduled Retry, pause for gateway cooldown window
@@ -224,8 +181,8 @@ export const processRecoveryCase = inngest.createFunction(
       await step.sleep("scheduled-retry-delay", "30m");
     }
 
-    // Execute the recovery action
-    const actionResult = await step.run("execute-recovery-action", async () => {
+    // Step 5: Execute the recovery action strictly via bounded RecoveryCommand
+    const executionOutcome = await step.run("execute-recovery-action", async () => {
       const recoveryCase = await db.recoveryCase.findUnique({
         where: { id: recoveryCaseId },
         include: { payment: true, order: true },
@@ -233,13 +190,15 @@ export const processRecoveryCase = inngest.createFunction(
 
       if (!recoveryCase) throw new Error("Case not found");
 
+      const attemptNumber = recoveryCase.attemptCount + 1;
+
       // Create action record
       const action = await db.recoveryAction.create({
         data: {
           recoveryCaseId,
           merchantId,
           actionType: recommendation.recommendedAction,
-          attemptNumber: recoveryCase.attemptCount + 1,
+          attemptNumber,
           status: "EXECUTING",
           executedAt: new Date(),
         },
@@ -250,329 +209,359 @@ export const processRecoveryCase = inngest.createFunction(
         data: {
           selectedAction: recommendation.recommendedAction,
           status: RecoveryCaseStatus.EXECUTING,
-          attemptCount: recoveryCase.attemptCount + 1,
+          attemptCount: attemptNumber,
         },
       });
 
-      // Execute based on action type
       if (
         recommendation.recommendedAction === RecoveryActionType.PAYMENT_RETRY ||
         recommendation.recommendedAction === RecoveryActionType.ALTERNATE_METHOD ||
         recommendation.recommendedAction === RecoveryActionType.SCHEDULED_RETRY
       ) {
-        try {
-          // Create a new Razorpay order for retry
-          const rzpOrder = await createRazorpayOrder({
-            amount: recoveryCase.riskAmount,
-            currency: recoveryCase.order?.currency || "INR",
-            receipt: `recovery_${recoveryCaseId.slice(-8)}_${Date.now()}`,
-            notes: {
-              recovery_case_id: recoveryCaseId,
-              original_payment_id: recoveryCase.paymentId,
-              recovery_attempt: String(recoveryCase.attemptCount + 1),
-            },
-          });
-
-          // Create new order record
-          const newOrder = await db.order.create({
-            data: {
-              merchantId,
-              amount: recoveryCase.riskAmount,
-              currency: recoveryCase.order?.currency || "INR",
-              razorpayOrderId: rzpOrder.id,
-              receipt: `recovery_${recoveryCaseId.slice(-8)}`,
-              notes: {
-                recovery_case_id: recoveryCaseId,
-                original_order_id: recoveryCase.orderId,
-              },
-            },
-          });
-
-          // For simulated data or test mode, simulate payment success
-          if (recoveryCase.isSimulated || process.env.NODE_ENV === "development") {
-            const shouldSucceed = Math.random() < recoveryCase.recoveryProbability;
-
-            if (shouldSucceed) {
-              // Simulate successful payment
-              const newPayment = await db.payment.create({
-                data: {
-                  merchantId,
-                  orderId: newOrder.id,
-                  razorpayPaymentId: `pay_recovery_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
-                  razorpayOrderId: rzpOrder.id,
-                  amount: recoveryCase.riskAmount,
-                  currency: recoveryCase.order?.currency || "INR",
-                  paymentMethod: recommendation.recommendedAction === RecoveryActionType.ALTERNATE_METHOD
-                    ? "card" // Switch to alternate method
-                    : recoveryCase.paymentMethod || "upi",
-                  status: PaymentStatus.SUCCESS,
-                },
-              });
-
-              await db.order.update({
-                where: { id: newOrder.id },
-                data: { status: OrderStatus.PAID },
-              });
-
-              // Record ledger entry
-              await LedgerService.recordPaymentTransaction({
-                merchantId,
-                paymentId: newPayment.id,
-                orderId: newOrder.id,
-                amount: recoveryCase.riskAmount,
-                referenceId: newPayment.razorpayPaymentId || undefined,
-                currency: recoveryCase.order?.currency || "INR",
-                description: `Recovery payment for case ${recoveryCaseId.slice(-8)}`,
-              });
-
-              // Update action
-              await db.recoveryAction.update({
-                where: { id: action.id },
-                data: {
-                  status: "SUCCESS",
-                  newPaymentId: newPayment.id,
-                  newOrderId: newOrder.id,
-                  completedAt: new Date(),
-                  output: {
-                    razorpayPaymentId: newPayment.razorpayPaymentId,
-                    amount: recoveryCase.riskAmount,
-                  },
-                },
-              });
-
-              // Mark case as recovered
-              await db.recoveryCase.update({
-                where: { id: recoveryCaseId },
-                data: {
-                  status: RecoveryCaseStatus.RECOVERED,
-                  recoveredAmount: recoveryCase.riskAmount,
-                  resolvedAt: new Date(),
-                },
-              });
-
-              await db.recoveryTimeline.create({
-                data: {
-                  recoveryCaseId,
-                  event: "recovery_completed",
-                  description: `₹${(recoveryCase.riskAmount / 100).toLocaleString("en-IN")} successfully recovered via ${recommendation.recommendedAction.replace(/_/g, " ").toLowerCase()}`,
-                  actor: "system",
-                  metadata: {
-                    recoveredAmount: recoveryCase.riskAmount,
-                    newPaymentId: newPayment.id,
-                  },
-                },
-              });
-
-              await AuditService.createAuditLog({
-                merchantId,
-                entityType: "recovery_case",
-                entityId: recoveryCaseId,
-                action: "recovery_completed",
-                changes: {
-                  recoveredAmount: recoveryCase.riskAmount,
-                  newPaymentId: newPayment.id,
-                },
-              });
-
-              return { status: "recovered", amount: recoveryCase.riskAmount };
-            } else {
-              // Simulate failed retry
-              await db.recoveryAction.update({
-                where: { id: action.id },
-                data: {
-                  status: "FAILED",
-                  completedAt: new Date(),
-                  output: { reason: "Payment retry failed" },
-                },
-              });
-
-              // Check if max attempts reached
-              if (recoveryCase.attemptCount + 1 >= recoveryCase.maxAttempts) {
-                await db.recoveryCase.update({
-                  where: { id: recoveryCaseId },
-                  data: {
-                    status: RecoveryCaseStatus.STOPPED,
-                    stopReason: "MAX_ATTEMPTS_REACHED",
-                    resolvedAt: new Date(),
-                  },
-                });
-
-                await db.recoveryTimeline.create({
-                  data: {
-                    recoveryCaseId,
-                    event: "case_stopped",
-                    description: "Maximum recovery attempts reached",
-                    actor: "system",
-                  },
-                });
-
-                return { status: "stopped", reason: "MAX_ATTEMPTS_REACHED" };
-              } else {
-                // Reset to ACTION_PENDING for another attempt
-                await db.recoveryCase.update({
-                  where: { id: recoveryCaseId },
-                  data: { status: RecoveryCaseStatus.ACTION_PENDING },
-                });
-
-                await db.recoveryTimeline.create({
-                  data: {
-                    recoveryCaseId,
-                    event: "retry_failed",
-                    description: `Recovery attempt ${recoveryCase.attemptCount + 1} failed — will reassess`,
-                    actor: "system",
-                  },
-                });
-
-                return { status: "retry_failed", attempt: recoveryCase.attemptCount + 1 };
-              }
-            }
-          }
-
-          // Non-simulated: order created, waiting for payment via webhook
-          await db.recoveryAction.update({
-            where: { id: action.id },
-            data: {
-              newOrderId: newOrder.id,
-              output: { razorpayOrderId: rzpOrder.id },
-            },
-          });
-
-          await db.recoveryTimeline.create({
-            data: {
-              recoveryCaseId,
-              event: "payment_retry_initiated",
-              description: `Recovery order created, awaiting payment`,
-              actor: "system",
-              metadata: { razorpayOrderId: rzpOrder.id },
-            },
-          });
-
-          return { status: "awaiting_payment", orderId: newOrder.id };
-
-        } catch (err) {
-          logger.error("Recovery action execution failed", { recoveryCaseId }, err);
-
-          await db.recoveryAction.update({
-            where: { id: action.id },
-            data: {
-              status: "FAILED",
-              completedAt: new Date(),
-              output: { error: err instanceof Error ? err.message : "Unknown error" },
-            },
-          });
-
-          await db.recoveryCase.update({
-            where: { id: recoveryCaseId },
-            data: { status: RecoveryCaseStatus.FAILED },
-          });
-
-          return { status: "execution_error" };
-        }
-      } else if (recommendation.recommendedAction === RecoveryActionType.MERCHANT_ESCALATION) {
-        await db.recoveryCase.update({
-          where: { id: recoveryCaseId },
-          data: {
-            status: RecoveryCaseStatus.ESCALATED,
-            escalationReason: "AI recommended merchant intervention",
-            resolvedAt: new Date(),
+        // Create new Razorpay order for retry
+        const rzpOrder = await createRazorpayOrder({
+          amount: recoveryCase.riskAmount,
+          currency: recoveryCase.order?.currency || "INR",
+          receipt: `recovery_${recoveryCaseId.slice(-8)}_${Date.now()}`,
+          notes: {
+            recovery_case_id: recoveryCaseId,
+            original_payment_id: recoveryCase.paymentId,
+            recovery_attempt: String(attemptNumber),
           },
         });
 
+        const newOrder = await db.order.create({
+          data: {
+            merchantId,
+            amount: recoveryCase.riskAmount,
+            currency: recoveryCase.order?.currency || "INR",
+            razorpayOrderId: rzpOrder.id,
+            receipt: `recovery_${recoveryCaseId.slice(-8)}`,
+            notes: {
+              recovery_case_id: recoveryCaseId,
+              original_order_id: recoveryCase.orderId,
+            },
+          },
+        });
+
+        // ONLY if this is an explicit sandbox simulation case, deterministically complete the outcome
+        if (recoveryCase.isSimulated) {
+          const shouldSucceed = Math.random() < recoveryCase.recoveryProbability;
+
+          if (shouldSucceed) {
+            const newPayment = await db.payment.create({
+              data: {
+                merchantId,
+                orderId: newOrder.id,
+                razorpayPaymentId: `pay_sim_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
+                razorpayOrderId: rzpOrder.id,
+                amount: recoveryCase.riskAmount,
+                currency: recoveryCase.order?.currency || "INR",
+                paymentMethod: recommendation.recommendedAction === RecoveryActionType.ALTERNATE_METHOD
+                  ? "card"
+                  : recoveryCase.paymentMethod || "upi",
+                status: PaymentStatus.SUCCESS,
+              },
+            });
+
+            await db.order.update({
+              where: { id: newOrder.id },
+              data: { status: OrderStatus.PAID },
+            });
+
+            // Authoritatively record outcome and credit ledger
+            await RecoveryService.recordRecoveryOutcome(merchantId, {
+              recoveryCaseId,
+              actionId: action.id,
+              status: "SUCCESS",
+              recoveredAmountPaise: recoveryCase.riskAmount,
+              razorpayPaymentId: newPayment.razorpayPaymentId || undefined,
+              razorpayOrderId: rzpOrder.id,
+              verifiedVia: "simulation",
+              completedAt: new Date(),
+            });
+
+            return { status: "recovered", amount: recoveryCase.riskAmount };
+          } else {
+            await RecoveryService.recordRecoveryOutcome(merchantId, {
+              recoveryCaseId,
+              actionId: action.id,
+              status: "FAILED",
+              recoveredAmountPaise: 0,
+              verifiedVia: "simulation",
+              completedAt: new Date(),
+              error: "Simulated bank decline",
+            });
+
+            return { status: "retry_failed", attempt: attemptNumber };
+          }
+        }
+
+        // Live / Test Mode: Order created, awaiting actual customer payment / webhook confirmation
         await db.recoveryAction.update({
           where: { id: action.id },
-          data: { status: "SUCCESS", completedAt: new Date() },
+          data: {
+            newOrderId: newOrder.id,
+            output: { razorpayOrderId: rzpOrder.id, status: "AWAITING_PAYMENT" },
+          },
         });
 
         await db.recoveryTimeline.create({
           data: {
             recoveryCaseId,
-            event: "case_escalated",
-            description: "Escalated to merchant for manual intervention",
+            event: "payment_retry_initiated",
+            description: `Recovery order created (#${rzpOrder.id}), awaiting customer payment webhook`,
             actor: "system",
+            metadata: { razorpayOrderId: rzpOrder.id },
           },
         });
 
+        return { status: "awaiting_payment", orderId: newOrder.id };
+      }
+
+      if (recommendation.recommendedAction === RecoveryActionType.MERCHANT_ESCALATION) {
+        await RecoveryService.escalateCase(merchantId, recoveryCaseId, "AI recommended merchant escalation");
         return { status: "escalated" };
-      } else if (recommendation.recommendedAction === RecoveryActionType.STOP_RECOVERY) {
-        await db.recoveryCase.update({
-          where: { id: recoveryCaseId },
-          data: {
-            status: RecoveryCaseStatus.STOPPED,
-            stopReason: "LOW_RECOVERY_PROBABILITY",
-            resolvedAt: new Date(),
-          },
-        });
+      }
 
-        await db.recoveryAction.update({
-          where: { id: action.id },
-          data: { status: "SUCCESS", completedAt: new Date() },
-        });
-
+      if (recommendation.recommendedAction === RecoveryActionType.STOP_RECOVERY) {
+        await RecoveryService.stopCase(merchantId, recoveryCaseId, "AI recommended stopping recovery");
         return { status: "stopped" };
       }
 
-      return { status: "unknown_action" };
+      return { status: "completed" };
     });
 
-    logger.info("Recovery case processing completed", {
-      recoveryCaseId,
-      result: actionResult,
-    });
-
-    return actionResult;
+    return executionOutcome;
   }
 );
 
 /**
- * Process batch recovery: detect failed payments and create cases
+ * Periodic anomaly scanner:
+ * Checks for payment failure anomalies and auto-generates recovery cases
  */
-export const processBatchRecovery = inngest.createFunction(
+export const scanForRecoveryOpportunities = inngest.createFunction(
   {
-    id: "process-batch-recovery",
+    id: "scan-recovery-opportunities",
     retries: 1,
-    triggers: [{ event: "recovery/batch.started" }],
+    triggers: [{ cron: "*/15 * * * *" }], // Every 15 minutes
+  },
+  async ({ step }: { step: StepTools }) => {
+    const opportunities = await step.run("find-unrecovered-failures", async () => {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      // Find failed payments in the last 24h that don't have an active recovery case
+      const failedPayments = await db.payment.findMany({
+        where: {
+          status: PaymentStatus.FAILED,
+          createdAt: { gte: oneDayAgo },
+          recoveryCases: {
+            none: {
+              status: {
+                in: [
+                  RecoveryCaseStatus.DETECTED,
+                  RecoveryCaseStatus.ANALYZING,
+                  RecoveryCaseStatus.ACTION_PENDING,
+                  RecoveryCaseStatus.EXECUTING,
+                  RecoveryCaseStatus.RECOVERED,
+                ],
+              },
+            },
+          },
+        },
+        take: 50,
+      });
+
+      return failedPayments.map((p) => ({
+        paymentId: p.id,
+        merchantId: p.merchantId,
+        orderId: p.orderId,
+        amount: p.amount,
+        failureReason: p.failureReason,
+        paymentMethod: p.paymentMethod,
+      }));
+    });
+
+    if (opportunities.length === 0) {
+      return { created: 0 };
+    }
+
+    const createdCases = await step.run("create-recovery-cases", async () => {
+      let created = 0;
+      for (const opp of opportunities) {
+        try {
+          await RecoveryService.createRecoveryCase({
+            merchantId: opp.merchantId,
+            paymentId: opp.paymentId,
+            orderId: opp.orderId,
+            riskAmount: opp.amount,
+            failureType: "payment_failure",
+            failureReason: opp.failureReason || "Gateway failure",
+            paymentMethod: opp.paymentMethod || "upi",
+          });
+          created++;
+        } catch (err) {
+          logger.warn("Failed to create recovery case in batch scan", { paymentId: opp.paymentId }, err);
+        }
+      }
+      return { created };
+    });
+
+    return createdCases;
+  }
+);
+
+/**
+ * Execute a recovery campaign across a batch of failed transactions
+ */
+export const executeScheduledCampaign = inngest.createFunction(
+  {
+    id: "execute-recovery-campaign",
+    retries: 1,
+    triggers: [{ event: "recovery/campaign.scheduled" }],
   },
   async ({
     event,
     step,
   }: {
-    event: { data: { merchantId: string; batchId: string } };
+    event: {
+      data: {
+        campaignId: string;
+        merchantId: string;
+        lookbackHours: number;
+        failureTypeFilter?: string;
+        minAmount?: number;
+      };
+    };
     step: StepTools;
   }) => {
-    const { merchantId, batchId } = event.data;
+    const { campaignId, merchantId, lookbackHours, failureTypeFilter, minAmount } = event.data;
 
-    const result = await step.run("detect-and-create-cases", async () => {
-      // Import dynamically to avoid circular deps
-      const { RecoveryService } = await import("@/server/services/recovery.service");
-      return await RecoveryService.detectAndCreateCases(merchantId, {
-        since: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        limit: 100,
+    const candidates = await step.run("query-campaign-candidates", async () => {
+      const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000);
+
+      const payments = await db.payment.findMany({
+        where: {
+          merchantId,
+          status: PaymentStatus.FAILED,
+          createdAt: { gte: since },
+          ...(minAmount && { amount: { gte: minAmount } }),
+          recoveryCases: {
+            none: {
+              status: {
+                in: [
+                  RecoveryCaseStatus.DETECTED,
+                  RecoveryCaseStatus.ANALYZING,
+                  RecoveryCaseStatus.ACTION_PENDING,
+                  RecoveryCaseStatus.EXECUTING,
+                  RecoveryCaseStatus.RECOVERED,
+                ],
+              },
+            },
+          },
+        },
+        take: 100,
       });
+
+      return payments.map((p) => ({
+        paymentId: p.id,
+        orderId: p.orderId,
+        amount: p.amount,
+        failureReason: p.failureReason,
+        paymentMethod: p.paymentMethod,
+      }));
     });
 
-    logger.info("Batch recovery completed", {
-      merchantId,
-      batchId,
-      ...result,
+    const result = await step.run("execute-campaign-batch", async () => {
+      let created = 0;
+      let skipped = 0;
+
+      for (const p of candidates) {
+        try {
+          await RecoveryService.createRecoveryCase({
+            merchantId,
+            paymentId: p.paymentId,
+            orderId: p.orderId,
+            riskAmount: p.amount,
+            failureType: failureTypeFilter || "payment_failure",
+            failureReason: p.failureReason || "Campaign scan failure",
+            paymentMethod: p.paymentMethod || "upi",
+          });
+          created++;
+        } catch {
+          skipped++;
+        }
+      }
+
+      await AuditService.createAuditLog({
+        merchantId,
+        entityType: "recovery_case",
+        entityId: campaignId,
+        action: "campaign_executed",
+        changes: { created, skipped, lookbackHours },
+      });
+
+      return { created, skipped, total: candidates.length };
     });
 
-    return { batchId, ...result };
+    return result;
   }
 );
 
 /**
- * Hourly Cron Worker to automatically expire stale active recovery cases older than 72 hours
+ * Process batch recovery for selected case IDs
+ */
+export const processBatchRecovery = inngest.createFunction(
+  {
+    id: "process-batch-recovery",
+    retries: 1,
+    triggers: [{ event: "recovery/batch.requested" }],
+  },
+  async ({
+    event,
+    step,
+  }: {
+    event: { data: { merchantId: string; caseIds: string[]; actionType?: RecoveryActionType } };
+    step: StepTools;
+  }) => {
+    const { merchantId, caseIds, actionType } = event.data;
+
+    return step.run("execute-batch-actions", async () => {
+      let executed = 0;
+      let blocked = 0;
+
+      for (const caseId of caseIds) {
+        try {
+          const action = actionType || RecoveryActionType.PAYMENT_RETRY;
+          const result = await RecoveryService.executeRecoveryAction(merchantId, caseId, action);
+          if (result.allowed) {
+            executed++;
+          } else {
+            blocked++;
+          }
+        } catch {
+          blocked++;
+        }
+      }
+
+      return { executed, blocked, total: caseIds.length };
+    });
+  }
+);
+
+/**
+ * Expire stale recovery cases older than policy expiration window (72h)
  */
 export const expireStaleRecoveryCasesCron = inngest.createFunction(
   {
     id: "expire-stale-recovery-cases",
-    retries: 2,
+    retries: 1,
     triggers: [{ cron: "0 * * * *" }], // Hourly
   },
   async ({ step }: { step: StepTools }) => {
-    const expiredCasesSummary = await step.run("expire-stale-cases", async () => {
+    return step.run("expire-stale-cases", async () => {
       const expirationHours = 72;
-      const cutoffDate = new Date(Date.now() - expirationHours * 60 * 60 * 1000);
+      const cutoff = new Date(Date.now() - expirationHours * 60 * 60 * 1000);
 
       const staleCases = await db.recoveryCase.findMany({
         where: {
@@ -581,53 +570,35 @@ export const expireStaleRecoveryCasesCron = inngest.createFunction(
               RecoveryCaseStatus.DETECTED,
               RecoveryCaseStatus.ANALYZING,
               RecoveryCaseStatus.ACTION_PENDING,
-              RecoveryCaseStatus.EXECUTING,
             ],
           },
-          createdAt: { lt: cutoffDate },
+          createdAt: { lt: cutoff },
         },
-        select: { id: true, merchantId: true, riskAmount: true },
+        take: 100,
       });
 
-      if (staleCases.length === 0) {
-        return { expiredCount: 0, cases: [] };
-      }
-
-      for (const sc of staleCases) {
+      let expiredCount = 0;
+      for (const c of staleCases) {
         await db.recoveryCase.update({
-          where: { id: sc.id },
+          where: { id: c.id },
           data: {
             status: RecoveryCaseStatus.EXPIRED,
-            stopReason: "PAYMENT_EXPIRED",
             resolvedAt: new Date(),
           },
         });
 
         await db.recoveryTimeline.create({
           data: {
-            recoveryCaseId: sc.id,
+            recoveryCaseId: c.id,
             event: "case_expired",
-            description: `Recovery window expired after ${expirationHours} hours`,
-            actor: "system",
+            description: `Recovery window expired (> ${expirationHours}h limit)`,
+            actor: "policy_engine",
           },
         });
-
-        await AuditService.createAuditLog({
-          merchantId: sc.merchantId,
-          entityType: "recovery_case",
-          entityId: sc.id,
-          action: "recovery_case_expired",
-          changes: { reason: "PAYMENT_EXPIRED", cutoffDate },
-        });
+        expiredCount++;
       }
 
-      return {
-        expiredCount: staleCases.length,
-        cases: staleCases.map((c) => c.id),
-      };
+      return { expiredCount };
     });
-
-    logger.info("Expired stale recovery cases cron complete", expiredCasesSummary);
-    return expiredCasesSummary;
   }
 );
