@@ -546,7 +546,14 @@ export const processBatchRecovery = inngest.createFunction(
       const cases = await db.recoveryCase.findMany({
         where: {
           merchantId,
-          status: { in: [RecoveryCaseStatus.OPEN, RecoveryCaseStatus.IN_PROGRESS] },
+          status: {
+            in: [
+              RecoveryCaseStatus.DETECTED,
+              RecoveryCaseStatus.ANALYZING,
+              RecoveryCaseStatus.ACTION_PENDING,
+              RecoveryCaseStatus.EXECUTING,
+            ],
+          },
         },
         select: { id: true },
         take: 50,

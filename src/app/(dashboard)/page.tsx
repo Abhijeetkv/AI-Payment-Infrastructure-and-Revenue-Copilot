@@ -47,6 +47,11 @@ interface MetricData {
     riskAmount: number;
     recoveredAmount: number;
   }>;
+  trajectory?: {
+    "7d": Array<{ name: string; risk: number; recovered: number }>;
+    "30d": Array<{ name: string; risk: number; recovered: number }>;
+    "90d": Array<{ name: string; risk: number; recovered: number }>;
+  };
 }
 
 interface RecoveryCaseItem {
@@ -142,36 +147,36 @@ export default function DashboardOverviewPage() {
     }
   };
 
-  // Mocked/dynamic chart timeseries based on selected timeRange
-  const chartData7d = [
-    { name: "Mon", risk: 42000, recovered: 28000 },
-    { name: "Tue", risk: 58000, recovered: 41000 },
-    { name: "Wed", risk: 39000, recovered: 27000 },
-    { name: "Thu", risk: 75000, recovered: 52000 },
-    { name: "Fri", risk: 62000, recovered: 48000 },
-    { name: "Sat", risk: 89000, recovered: 67000 },
-    { name: "Sun", risk: 94000, recovered: 78000 },
+  // Clean timeseries from live metrics or zero baseline
+  const defaultEmpty7d = [
+    { name: "Mon", risk: 0, recovered: 0 },
+    { name: "Tue", risk: 0, recovered: 0 },
+    { name: "Wed", risk: 0, recovered: 0 },
+    { name: "Thu", risk: 0, recovered: 0 },
+    { name: "Fri", risk: 0, recovered: 0 },
+    { name: "Sat", risk: 0, recovered: 0 },
+    { name: "Sun", risk: 0, recovered: 0 },
   ];
 
-  const chartData30d = [
-    { name: "Week 1", risk: 340000, recovered: 210000 },
-    { name: "Week 2", risk: 480000, recovered: 320000 },
-    { name: "Week 3", risk: 410000, recovered: 290000 },
-    { name: "Week 4", risk: 590000, recovered: 430000 },
+  const defaultEmpty30d = [
+    { name: "Week 1", risk: 0, recovered: 0 },
+    { name: "Week 2", risk: 0, recovered: 0 },
+    { name: "Week 3", risk: 0, recovered: 0 },
+    { name: "Week 4", risk: 0, recovered: 0 },
   ];
 
-  const chartData90d = [
-    { name: "Month 1", risk: 1420000, recovered: 980000 },
-    { name: "Month 2", risk: 1850000, recovered: 1320000 },
-    { name: "Month 3", risk: 2310000, recovered: 1740000 },
+  const defaultEmpty90d = [
+    { name: "Month 1", risk: 0, recovered: 0 },
+    { name: "Month 2", risk: 0, recovered: 0 },
+    { name: "Month 3", risk: 0, recovered: 0 },
   ];
 
   const activeChartData =
     timeRange === "7d"
-      ? chartData7d
+      ? (metrics?.trajectory?.["7d"] || defaultEmpty7d)
       : timeRange === "30d"
-        ? chartData30d
-        : chartData90d;
+        ? (metrics?.trajectory?.["30d"] || defaultEmpty30d)
+        : (metrics?.trajectory?.["90d"] || defaultEmpty90d);
 
   // Format failure category names into Title Case
   const formatCategoryName = (type: string) => {
@@ -190,10 +195,10 @@ export default function DashboardOverviewPage() {
 
   // Standard failure categories taxonomy
   const standardCategories = [
-    { key: "payment_failure", name: "Payment Failure", defaultRisk: 240000, defaultRecovered: 165000 },
-    { key: "checkout_drop_off", name: "Checkout Drop-off", defaultRisk: 120000, defaultRecovered: 72000 },
-    { key: "upi_degradation", name: "UPI Degradation", defaultRisk: 85000, defaultRecovered: 59000 },
-    { key: "card_decline", name: "Card Decline", defaultRisk: 45000, defaultRecovered: 28000 },
+    { key: "payment_failure", name: "Payment Failure" },
+    { key: "checkout_drop_off", name: "Checkout Drop-off" },
+    { key: "upi_degradation", name: "UPI Degradation" },
+    { key: "card_decline", name: "Card Decline" },
   ];
 
   // Map and merge live database metrics with standard categories taxonomy
@@ -204,8 +209,8 @@ export default function DashboardOverviewPage() {
 
     return {
       name: cat.name,
-      risk: liveItem ? liveItem.riskAmount / 100 : (metrics ? 0 : cat.defaultRisk),
-      recovered: liveItem ? liveItem.recoveredAmount / 100 : (metrics ? 0 : cat.defaultRecovered),
+      risk: liveItem ? liveItem.riskAmount / 100 : 0,
+      recovered: liveItem ? liveItem.recoveredAmount / 100 : 0,
     };
   });
 
@@ -225,12 +230,12 @@ export default function DashboardOverviewPage() {
 
   const displayBreakdown = [...standardResults, ...extraResults];
 
-  // Formatted KPI numbers
-  const revAtRisk = metrics?.revenueAtRisk ?? 48200000;
-  const expRecovery = metrics?.expectedRecovery ?? 28900000;
-  const actRecovered = metrics?.recoveredRevenue ?? 19400000;
-  const recRate = metrics?.recoveryRate ?? 67.1;
-  const actCases = metrics?.activeCases ?? 18;
+  // Formatted KPI numbers strictly from live database metrics
+  const revAtRisk = metrics?.revenueAtRisk ?? 0;
+  const expRecovery = metrics?.expectedRecovery ?? 0;
+  const actRecovered = metrics?.recoveredRevenue ?? 0;
+  const recRate = metrics?.recoveryRate ?? 0;
+  const actCases = metrics?.activeCases ?? 0;
 
   return (
     <div className="space-y-6">
@@ -447,7 +452,15 @@ export default function DashboardOverviewPage() {
                     fontSize={11}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(val) => `₹${val >= 100000 ? `${(val / 100000).toFixed(1)}L` : `${val / 1000}k`}`}
+                    tickFormatter={(val) =>
+                      val === 0
+                        ? "₹0"
+                        : val >= 100000
+                        ? `₹${(val / 100000).toFixed(1)}L`
+                        : val >= 1000
+                        ? `₹${(val / 1000).toFixed(1)}k`
+                        : `₹${val}`
+                    }
                   />
                   <Tooltip
                     formatter={(val) => [`₹${Number(val).toLocaleString("en-IN")}`, ""]}
@@ -520,7 +533,15 @@ export default function DashboardOverviewPage() {
                     fontSize={10}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(val) => `₹${val >= 100000 ? `${(val / 100000).toFixed(0)}L` : `${val / 1000}k`}`}
+                    tickFormatter={(val) =>
+                      val === 0
+                        ? "₹0"
+                        : val >= 100000
+                        ? `₹${(val / 100000).toFixed(0)}L`
+                        : val >= 1000
+                        ? `₹${(val / 1000).toFixed(1)}k`
+                        : `₹${val}`
+                    }
                   />
                   <YAxis
                     dataKey="name"

@@ -347,6 +347,57 @@ export class RevenueRiskService {
           : 0,
     }));
 
+    // Compute live trajectory based on actual cases
+    const now = new Date();
+    const sinceDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const recentCases = await db.recoveryCase.findMany({
+      where: { merchantId, createdAt: { gte: sinceDate } },
+      select: { createdAt: true, riskAmount: true, recoveredAmount: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // 7d: 7 days
+    const chart7d: Array<{ name: string; risk: number; recovered: number }> = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dayStr = d.toLocaleDateString("en-US", { weekday: "short" });
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      const dayCases = recentCases.filter((c) => c.createdAt >= dayStart && c.createdAt <= dayEnd);
+      chart7d.push({
+        name: dayStr,
+        risk: dayCases.reduce((sum, c) => sum + (c.riskAmount || 0), 0) / 100,
+        recovered: dayCases.reduce((sum, c) => sum + (c.recoveredAmount || 0), 0) / 100,
+      });
+    }
+
+    // 30d: 4 weeks
+    const chart30d: Array<{ name: string; risk: number; recovered: number }> = [];
+    for (let w = 3; w >= 0; w--) {
+      const weekStart = new Date(now.getTime() - (w + 1) * 7 * 24 * 60 * 60 * 1000);
+      const weekEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
+      const weekCases = recentCases.filter((c) => c.createdAt >= weekStart && c.createdAt < weekEnd);
+      chart30d.push({
+        name: `Week ${4 - w}`,
+        risk: weekCases.reduce((sum, c) => sum + (c.riskAmount || 0), 0) / 100,
+        recovered: weekCases.reduce((sum, c) => sum + (c.recoveredAmount || 0), 0) / 100,
+      });
+    }
+
+    // 90d: 3 months
+    const chart90d: Array<{ name: string; risk: number; recovered: number }> = [];
+    for (let m = 2; m >= 0; m--) {
+      const monthStart = new Date(now.getTime() - (m + 1) * 30 * 24 * 60 * 60 * 1000);
+      const monthEnd = new Date(now.getTime() - m * 30 * 24 * 60 * 60 * 1000);
+      const monthCases = recentCases.filter((c) => c.createdAt >= monthStart && c.createdAt < monthEnd);
+      chart90d.push({
+        name: `Month ${3 - m}`,
+        risk: monthCases.reduce((sum, c) => sum + (c.riskAmount || 0), 0) / 100,
+        recovered: monthCases.reduce((sum, c) => sum + (c.recoveredAmount || 0), 0) / 100,
+      });
+    }
+
     return {
       revenueAtRisk,
       expectedRecovery,
@@ -362,6 +413,11 @@ export class RevenueRiskService {
       byFailureType,
       byPaymentMethod,
       byAction,
+      trajectory: {
+        "7d": chart7d,
+        "30d": chart30d,
+        "90d": chart90d,
+      },
     };
   }
 

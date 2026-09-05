@@ -204,6 +204,11 @@ export interface RecoveryMetrics {
   byFailureType: FailureTypeBreakdown[];
   byPaymentMethod: MethodBreakdown[];
   byAction: ActionBreakdown[];
+  trajectory?: {
+    "7d": Array<{ name: string; risk: number; recovered: number }>;
+    "30d": Array<{ name: string; risk: number; recovered: number }>;
+    "90d": Array<{ name: string; risk: number; recovered: number }>;
+  };
 }
 
 export interface FailureTypeBreakdown {

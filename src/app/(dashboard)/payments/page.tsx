@@ -33,6 +33,13 @@ export default function PaymentsPage() {
   const [payments, setPayments] = React.useState<PaymentItem[]>([]);
   const [loading, setLoading] = React.useState(true);
 
+  // Razorpay Test Checkout Modal State
+  const [showCheckoutModal, setShowCheckoutModal] = React.useState(false);
+  const [checkoutAmount, setCheckoutAmount] = React.useState<number>(499);
+  const [customerName, setCustomerName] = React.useState<string>("Aditi Sen");
+  const [customerEmail, setCustomerEmail] = React.useState<string>("aditi.sen@example.com");
+  const [isProcessing, setIsProcessing] = React.useState(false);
+
   const fetchPayments = React.useCallback(async () => {
     setLoading(true);
     try {
@@ -47,6 +54,131 @@ export default function PaymentsPage() {
       setLoading(false);
     }
   }, []);
+
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window !== "undefined" && window.Razorpay) {
+        return resolve(true);
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handleLaunchCheckout = async () => {
+    try {
+      setIsProcessing(true);
+
+      // 1. Ensure Razorpay Checkout script is loaded
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        alert("Failed to load Razorpay Checkout SDK. Please check your network.");
+        return;
+      }
+
+      // 2. Create order on backend via Razorpay Test API
+      const amountPaise = Math.round(Number(checkoutAmount) * 100);
+      const orderRes = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: "INR",
+          receipt: `rcpt_chk_${Date.now()}`,
+          notes: {
+            customer_name: customerName,
+            customer_email: customerEmail,
+          },
+        }),
+      });
+
+      const orderJson = await orderRes.json();
+      if (!orderJson.success || !orderJson.data) {
+        throw new Error(orderJson.error?.message || "Failed to create Razorpay test order");
+      }
+
+      const order = orderJson.data;
+
+      // 3. Open Razorpay Test Mode Checkout Modal
+      const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TYQzggcAL1BBy5";
+
+      const options = {
+        key: keyId,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: "Lumina AI Payment Hub",
+        description: "Test Mode Transaction Verification",
+        order_id: order.razorpayOrderId,
+        prefill: {
+          name: customerName,
+          email: customerEmail,
+          contact: "9876543210",
+        },
+        theme: {
+          color: "#2a21d2",
+        },
+        handler: async function (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) {
+          try {
+            // 4. Verify signature on backend and record in PostgreSQL + Immutable Ledger
+            const verifyRes = await fetch("/api/payments", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId: order.id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+                amount: order.amount,
+                currency: order.currency || "INR",
+                paymentMethod: "card",
+              }),
+            });
+
+            const verifyJson = await verifyRes.json();
+            if (verifyJson.success) {
+              setShowCheckoutModal(false);
+              fetchPayments();
+            } else {
+              alert("Payment verification issue: " + verifyJson.error?.message);
+            }
+          } catch (err: unknown) {
+            console.error("Verification error:", err);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessing(false);
+          },
+        },
+      };
+
+      if (!window.Razorpay) {
+        throw new Error("Razorpay SDK not available");
+      }
+
+      const rzpInstance = new window.Razorpay(options);
+      rzpInstance.on("payment.failed", function (failResponse: { error?: { description?: string } }) {
+        console.warn("Razorpay payment failed as requested in test mode:", failResponse.error);
+        setShowCheckoutModal(false);
+        fetchPayments();
+      });
+
+      rzpInstance.open();
+    } catch (error: unknown) {
+      console.error("Checkout initiation error:", error);
+      const msg = error instanceof Error ? error.message : "Failed to open Razorpay Checkout";
+      alert(msg);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   React.useEffect(() => {
     let isMounted = true;
@@ -122,17 +254,126 @@ export default function PaymentsPage() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchPayments}
-          disabled={loading}
-          className="h-9 gap-1.5 text-xs text-[#191c1d] bg-white border-[#c4c7c7] hover:bg-[#f3f4f5] shadow-xs cursor-pointer"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#2a21d2]" : ""}`} />
-          <span>Refresh Ledger</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setShowCheckoutModal(true)}
+            className="h-9 gap-1.5 text-xs text-white bg-[#2a21d2] hover:bg-[#1b1599] shadow-xs cursor-pointer font-semibold"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            <span>Pay with Razorpay Test Modal</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchPayments}
+            disabled={loading}
+            className="h-9 gap-1.5 text-xs text-[#191c1d] bg-white border-[#c4c7c7] hover:bg-[#f3f4f5] shadow-xs cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-[#2a21d2]" : ""}`} />
+            <span>Refresh Ledger</span>
+          </Button>
+        </div>
       </div>
+
+      {/* Interactive Razorpay Test Checkout Modal */}
+      {showCheckoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white border border-[#e9ecef] rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#e9ecef] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-[#e0e0ff] text-[#2a21d2] flex items-center justify-center">
+                  <CreditCard className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#191c1d]">Razorpay Test Checkout</h3>
+                  <p className="text-[11px] text-[#444748]">Creates a live order and opens Razorpay Test Modal</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCheckoutModal(false)}
+                className="text-[#747878] hover:text-[#191c1d] text-sm cursor-pointer p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-[#191c1d] block mb-1">Amount (INR)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-[#747878] font-bold">₹</span>
+                  <input
+                    type="number"
+                    value={checkoutAmount}
+                    onChange={(e) => setCheckoutAmount(Number(e.target.value))}
+                    className="w-full pl-7 pr-3 py-1.5 border border-[#c4c7c7] rounded-md text-xs font-mono"
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#191c1d] block mb-1">Customer Name</label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-[#c4c7c7] rounded-md text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#191c1d] block mb-1">Customer Email</label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-[#c4c7c7] rounded-md text-xs"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-[#f8f9fa] border border-[#e9ecef] space-y-1 text-[11px] text-[#444748]">
+                <div className="font-semibold text-[#191c1d]">Razorpay Test Mode Helper:</div>
+                <div>• Use Test Card: <code className="bg-white px-1 py-0.5 rounded border border-[#e9ecef] font-mono">4111 1111 1111 1111</code></div>
+                <div>• Expiry: Any future date (e.g. <code className="font-mono">12/30</code>), CVV: <code className="font-mono">123</code></div>
+                <div>• In the simulated bank page, select <strong>Success</strong> or <strong>Failure</strong> to test!</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#e9ecef]">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCheckoutModal(false)}
+                disabled={isProcessing}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleLaunchCheckout}
+                disabled={isProcessing}
+                className="bg-[#2a21d2] hover:bg-[#1b1599] text-white text-xs font-semibold gap-1.5"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Opening Checkout...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Launch Razorpay Checkout</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Payments Table Card */}
       <div className="border border-[#e9ecef] bg-white shadow-xs rounded-lg overflow-hidden">
