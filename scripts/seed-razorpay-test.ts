@@ -175,12 +175,12 @@ async function seedRazorpayTestData() {
     limit: 10,
   });
 
-  console.log(`✓ Lumina AI generated ${cases.length} active Recovery Cases from failed test orders!`);
+  console.log(`✓ Lumina AI generated ${cases.created} active Recovery Cases from failed test orders!`);
   console.log("==================================================");
   console.log("🎉 Seeding Completed Successfully!");
   console.log(`• Real Razorpay Orders Created: ${createdOrders}`);
   console.log(`• Test Payments Recorded: ${createdPayments}`);
-  console.log(`• AI Recovery Cases Active: ${cases.length}`);
+  console.log(`• AI Recovery Cases Active: ${cases.created}`);
   console.log("Check your dashboard: http://localhost:3000/recovery/cases");
   console.log("Check your Razorpay dashboard: https://dashboard.razorpay.com/ (Orders tab)");
   console.log("==================================================");

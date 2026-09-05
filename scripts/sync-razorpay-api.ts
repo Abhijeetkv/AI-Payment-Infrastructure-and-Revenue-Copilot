@@ -132,7 +132,7 @@ async function syncRazorpayApiData() {
   console.log("✅ Razorpay API Sync Completed!");
   console.log(`• Live Razorpay Orders Imported: ${syncedOrders}`);
   console.log(`• Payments Synced: ${recordedPayments}`);
-  console.log(`• AI Recovery Cases Generated: ${cases.length}`);
+  console.log(`• AI Recovery Cases Generated: ${cases.created}`);
   console.log("• Fake/Mock 90-Day Seed Data: 0 (COMPLETELY REMOVED)");
   console.log("==================================================");
 }
