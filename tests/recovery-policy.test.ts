@@ -27,7 +27,7 @@ describe("Recovery Policy Engine Guardrails", () => {
 
     expect(result.allowed).toBe(true);
     expect(result.reasons.length).toBe(0);
-    expect(result.checks.every((c) => c.passed)).toBe(true);
+    expect(result.checks.every((c: { passed: boolean }) => c.passed)).toBe(true);
   });
 
   it("should block action when maximum attempts (3) have already been reached", async () => {

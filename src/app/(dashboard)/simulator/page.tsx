@@ -27,7 +27,7 @@ type ScenarioType =
   | "BANK_DECLINE"
   | "WEBHOOK_HMAC_TAMPER"
   | "WEBHOOK_DEDUPLICATION_REPLAY"
-  | "CONCURRENT_REFUND_RACE";
+  | "CONCURRENT_RECOVERY_RACE";
 
 interface SimulationStep {
   step: number;
@@ -100,16 +100,16 @@ const SCENARIOS = [
     description: "Simulates upstream gateway sending identical payment.captured webhook 3 times. Verifies exactly 1 ledger transaction is recorded.",
   },
   {
-    type: "CONCURRENT_REFUND_RACE" as ScenarioType,
-    title: "Concurrent Refund Race",
+    type: "CONCURRENT_RECOVERY_RACE" as ScenarioType,
+    title: "Concurrent Recovery Race",
     icon: RotateCcw,
     badge: "Redis Distributed Lock",
-    description: "Simulates 2 simultaneous refund requests on the same payment. Verifies distributed locking and live ledger balance checks prevent double-refunding.",
+    description: "Simulates customer paying via SMS recovery link at the same second a background retry runs. Verifies Redis lock prevents double-charging.",
   },
 ];
 
 export default function SimulatorPage() {
-  const [selectedScenario, setSelectedScenario] = React.useState<ScenarioType>("CONCURRENT_REFUND_RACE");
+  const [selectedScenario, setSelectedScenario] = React.useState<ScenarioType>("PAYMENT_FAILURE_RECOVERY");
   const [running, setRunning] = React.useState(false);
   const [result, setResult] = React.useState<SimulationResult | null>(null);
 

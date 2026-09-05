@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Sparkles,
   LayoutDashboard,
   ShieldCheck,
   Zap,
@@ -16,10 +15,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RazorpayIcon } from "@/components/ui/razorpay-logo";
 import { signOut } from "@/lib/auth/client";
 
 const navigationItems = [
-  { name: "Overview", href: "/", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Recovery Cases", href: "/recovery", icon: ShieldCheck },
   { name: "AI Copilot", href: "/copilot", icon: Bot },
   { name: "Agent Activity", href: "/agent", icon: Activity },
@@ -36,9 +36,9 @@ export function DashboardSidebar() {
   return (
     <nav className="h-full w-64 fixed left-0 top-0 border-r border-[#c7c4d8] bg-[#f8f9fa] flex flex-col py-4 px-2 overflow-y-auto z-50 select-none">
       {/* Brand Header */}
-      <div className="px-2 mb-6 flex items-center gap-2.5">
-        <div className="h-8 w-8 rounded-lg bg-[#2a21d2] flex items-center justify-center text-white shadow-xs">
-          <Sparkles className="h-4.5 w-4.5" />
+      <Link href="/" className="px-2 mb-6 flex items-center gap-2.5 hover:opacity-90 transition-opacity">
+        <div className="h-8 w-8 rounded-lg bg-[#0C2340] flex items-center justify-center text-white shadow-xs">
+          <RazorpayIcon className="h-5 w-5" fill="#0C83FE" />
         </div>
         <div className="flex flex-col">
           <span className="text-lg font-bold text-[#191c1d] leading-tight">
@@ -48,7 +48,7 @@ export function DashboardSidebar() {
             AI Revenue Recovery Agent
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* Main Navigation Links */}
       <div className="flex-1 flex flex-col gap-1">

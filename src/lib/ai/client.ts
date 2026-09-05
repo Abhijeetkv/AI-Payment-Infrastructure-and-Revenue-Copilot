@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import { executeCopilotTool } from "./tools";
 import { RECOVERY_AGENT_SYSTEM_INSTRUCTION, buildRecoveryAnalysisPrompt } from "./prompts";
 import { RecoveryActionType } from "@prisma/client";
+import type { AIRecommendation } from "@/lib/recovery/types";
+import { validateAIRecommendation } from "@/lib/recovery/validation";
 import { logger } from "@/lib/logger";
 
 export interface ChatMessageParam {
@@ -180,7 +182,7 @@ async function generateDeterministicResponse(
 }
 
 /**
- * Executes a conversational AI generation turn using Google Gemini, OpenAI, or the deterministic fallback
+ * Main Copilot entry point for conversational queries
  */
 export async function generateCopilotResponse(
   merchantId: string,
@@ -189,15 +191,11 @@ export async function generateCopilotResponse(
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY;
   const aiProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
-  const lastUserMsg = messages[messages.length - 1]?.content || "";
 
-  // 1. Google Gemini Provider
-  if (
-    process.env.NODE_ENV !== "test" &&
-    aiProvider === "gemini" &&
-    geminiApiKey &&
-    geminiApiKey !== "your-gemini-api-key"
-  ) {
+  const lastUserMessage = messages.filter((m) => m.role === "user").pop()?.content || "";
+
+  // 1. Try Gemini
+  if (aiProvider === "gemini" && geminiApiKey && geminiApiKey !== "your-gemini-api-key") {
     try {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({
@@ -205,73 +203,52 @@ export async function generateCopilotResponse(
         systemInstruction: SYSTEM_INSTRUCTION,
       });
 
-      // Execute appropriate tools based on user prompt context first
-      const toolOutput = await generateDeterministicResponse(merchantId, lastUserMsg);
-
-      const prompt = `Context data retrieved from merchant database:\n${JSON.stringify(
-        toolOutput.toolCallsExecuted.map((t) => ({ tool: t.toolName, result: t.toolOutput })),
-        null,
-        2
-      )}\n\nUser Question: ${lastUserMsg}\n\nPlease provide a clear, professional, and formatted response using this factual data. Focus on revenue recovery insights and actionable recommendations.`;
-
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+      const response = await model.generateContent(lastUserMessage);
+      const text = response.response.text();
 
       return {
-        content: text || toolOutput.content,
-        toolCallsExecuted: toolOutput.toolCallsExecuted,
+        content: text,
+        toolCallsExecuted: [],
         provider: "gemini",
       };
     } catch (err) {
-      logger.warn("Gemini API call failed, falling back to deterministic engine", {}, err);
+      logger.warn("Gemini Copilot generation failed, falling back to deterministic engine", { merchantId }, err);
     }
   }
 
-  // 2. OpenAI Provider
-  if (
-    process.env.NODE_ENV !== "test" &&
-    aiProvider === "openai" &&
-    openaiApiKey &&
-    !openaiApiKey.includes("your-")
-  ) {
+  // 2. Try OpenAI
+  if (aiProvider === "openai" && openaiApiKey && !openaiApiKey.includes("your-")) {
     try {
       const openai = new OpenAI({ apiKey: openaiApiKey });
-      const toolOutput = await generateDeterministicResponse(merchantId, lastUserMsg);
-
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: SYSTEM_INSTRUCTION },
-          {
-            role: "user",
-            content: `Context data retrieved from merchant database:\n${JSON.stringify(
-              toolOutput.toolCallsExecuted.map((t) => ({ tool: t.toolName, result: t.toolOutput })),
-              null,
-              2
-            )}\n\nUser Question: ${lastUserMsg}`,
-          },
+          ...messages.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
         ],
       });
 
-      const text = completion.choices[0]?.message?.content;
+      const text = completion.choices[0]?.message?.content || "";
       return {
-        content: text || toolOutput.content,
-        toolCallsExecuted: toolOutput.toolCallsExecuted,
+        content: text,
+        toolCallsExecuted: [],
         provider: "openai",
       };
     } catch (err) {
-      logger.warn("OpenAI API call failed, falling back to deterministic engine", {}, err);
+      logger.warn("OpenAI Copilot generation failed, falling back to deterministic engine", { merchantId }, err);
     }
   }
 
-  // 3. Fallback Deterministic Engine (Always reliable, verified against real database)
-  return await generateDeterministicResponse(merchantId, lastUserMsg);
+  // 3. Deterministic Grounded Engine
+  return generateDeterministicResponse(merchantId, lastUserMessage);
 }
+
+// ─── Structured Case Analysis Engine ─────────────────────────────────
 
 export interface RecoveryCaseAnalysisInput {
   caseId: string;
   merchantId: string;
-  riskAmount: number;
+  riskAmount: number; // in paise
   failureType: string;
   failureReason: string | null;
   paymentMethod: string | null;
@@ -283,29 +260,19 @@ export interface RecoveryCaseAnalysisInput {
   riskSummary?: string;
 }
 
-export interface StructuredRecoveryAnalysisResult {
-  analysis: string;
-  recommendedAction: RecoveryActionType;
-  confidence: number;
-  evidenceFactors: string[];
-  reasoning: string;
-  alternativeAction?: string;
-  provider: "gemini" | "openai" | "deterministic_engine";
-}
-
 /**
- * Intelligent AI Analysis for a specific Recovery Case.
- * Uses structured JSON prompting with Gemini/OpenAI, and falls back to a deterministic rules engine.
+ * Untrusted AI Case Analysis for a specific Recovery Case.
+ * Produces an advisory AIRecommendation. The output MUST be validated by the Policy Engine.
  */
 export async function generateRecoveryCaseAnalysis(
   input: RecoveryCaseAnalysisInput
-): Promise<StructuredRecoveryAnalysisResult> {
+): Promise<AIRecommendation> {
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY;
   const aiProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
 
   // Deterministic baseline recommendation
-  const deterministicFallback = (): StructuredRecoveryAnalysisResult => {
+  const deterministicFallback = (): AIRecommendation => {
     let recommendedAction: RecoveryActionType = RecoveryActionType.PAYMENT_RETRY;
     const evidenceFactors: string[] = [...input.factors];
 
@@ -339,11 +306,13 @@ export async function generateRecoveryCaseAnalysis(
 
     return {
       analysis: `Payment failure (${input.failureType}) with ${Math.round(input.probability * 100)}% estimated recovery probability.`,
+      rawAnalysis: `Payment failure (${input.failureType}) with ${Math.round(input.probability * 100)}% estimated recovery probability.`,
       recommendedAction,
-      confidence: input.probability,
+      confidence: Math.max(0, Math.min(1, input.probability)),
       evidenceFactors,
       reasoning: `Deterministic assessment based on method performance, customer history, and failure reason: ${input.failureReason || "Transaction declined"}.`,
       provider: "deterministic_engine",
+      generatedAt: new Date(),
     };
   };
 
@@ -352,66 +321,47 @@ export async function generateRecoveryCaseAnalysis(
     return deterministicFallback();
   }
 
-  const caseDataStr = JSON.stringify(
-    {
-      caseId: input.caseId,
-      riskAmount: `₹${(input.riskAmount / 100).toFixed(2)}`,
-      failureType: input.failureType,
-      failureReason: input.failureReason || "Transaction declined",
-      paymentMethod: input.paymentMethod || "unknown",
-      attemptCount: input.attemptCount,
-      estimatedProbability: `${Math.round(input.probability * 100)}%`,
-    },
-    null,
-    2
-  );
-
-  const paymentDataStr = JSON.stringify(
-    {
-      method: input.paymentMethod || "unknown",
-      amountPaise: input.riskAmount,
-      failureReason: input.failureReason,
-    },
-    null,
-    2
-  );
-
-  const customerHistoryStr = input.customerHistorySummary || "Customer historical data evaluated in deterministic probability factors.";
-  const methodPerfStr = JSON.stringify(input.methodPerformance, null, 2);
-  const riskSummaryStr = input.riskSummary || `Total risk amount: ₹${(input.riskAmount / 100).toFixed(2)}`;
-
   const promptText = buildRecoveryAnalysisPrompt({
-    caseData: caseDataStr,
-    paymentData: paymentDataStr,
-    customerHistory: customerHistoryStr,
-    methodPerformance: methodPerfStr,
-    riskSummary: riskSummaryStr,
+    caseId: input.caseId,
+    riskAmount: `₹${(input.riskAmount / 100).toFixed(2)}`,
+    attemptCount: input.attemptCount,
+    probability: `${Math.round(input.probability * 100)}%`,
+    methodPerformance: JSON.stringify(input.methodPerformance, null, 2),
+    failureReason: input.failureReason || "Transaction declined",
+    paymentMethod: input.paymentMethod || "unknown",
+    customerHistory: input.customerHistorySummary || "Customer historical transactions recorded in database.",
   });
 
-  const parseJsonResponse = (text: string, provider: "gemini" | "openai"): StructuredRecoveryAnalysisResult | null => {
+  const parseJsonResponse = (text: string, provider: "gemini" | "openai"): AIRecommendation | null => {
     try {
       // Strip markdown code fences if present
       const cleaned = text.replace(/```json\s*|\s*```/gi, "").trim();
       const parsed = JSON.parse(cleaned);
-      const actionStr = String(parsed.recommendedAction || "").trim().toUpperCase();
 
+      const actionStr = String(parsed.recommendedAction || "").trim().toUpperCase();
       const validAction = Object.values(RecoveryActionType).includes(actionStr as RecoveryActionType)
         ? (actionStr as RecoveryActionType)
         : null;
 
       if (!validAction) return null;
 
-      return {
-        analysis: String(parsed.analysis || "AI analysis completed."),
+      const rawCandidate = {
+        analysis: String(parsed.analysis || "AI advisory analysis completed."),
         recommendedAction: validAction,
-        confidence: typeof parsed.confidence === "number" ? parsed.confidence : input.probability,
+        confidence: typeof parsed.confidence === "number" ? Math.max(0, Math.min(1, parsed.confidence)) : input.probability,
+        reasoning: String(parsed.reasoning || "AI reasoning generated."),
         evidenceFactors: Array.isArray(parsed.evidenceFactors)
           ? parsed.evidenceFactors.map((f: unknown) => String(f))
           : input.factors,
-        reasoning: String(parsed.reasoning || "AI reasoning applied."),
-        alternativeAction: parsed.alternativeAction ? String(parsed.alternativeAction) : undefined,
+        alternativeAction: parsed.alternativeAction && Object.values(RecoveryActionType).includes(parsed.alternativeAction)
+          ? (parsed.alternativeAction as RecoveryActionType)
+          : undefined,
         provider,
+        generatedAt: new Date(),
+        rawAnalysis: String(parsed.analysis || "AI advisory analysis completed."),
       };
+
+      return validateAIRecommendation(rawCandidate);
     } catch {
       return null;
     }

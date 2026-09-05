@@ -1,14 +1,26 @@
 import { db } from "@/lib/db";
-import { PaymentStatus, RecoveryCaseStatus, RecoveryActionType, RecoveryStopReason, type Prisma } from "@prisma/client";
+import {
+  PaymentStatus,
+  RecoveryCaseStatus,
+  RecoveryActionType,
+  RecoveryStopReason,
+  type Prisma,
+} from "@prisma/client";
 import { AuditService } from "@/server/services/audit.service";
 import { RevenueRiskService } from "@/server/services/revenue-risk.service";
 import { RecoveryPolicyService } from "@/server/services/recovery-policy.service";
+import { LedgerService } from "@/lib/transactions/ledger";
 import { inngest } from "@/inngest/client";
 import { NotFoundError } from "@/server/errors";
 import { logger } from "@/lib/logger";
 import type {
   RecoveryCaseCreateInput,
   ListRecoveryCasesQuery,
+  AIRecommendation,
+  PolicyDecision,
+  RecoveryCommand,
+  RecoveryResult,
+  AgentActivityItem,
 } from "@/lib/recovery/types";
 
 export class RecoveryService {
@@ -28,7 +40,7 @@ export class RecoveryService {
       isSimulated = false,
     } = input;
 
-    // Check if a recovery case already exists for this payment (that isn't terminal)
+    // Check if a non-terminal recovery case already exists for this payment
     const existing = await db.recoveryCase.findFirst({
       where: {
         paymentId,
@@ -50,7 +62,7 @@ export class RecoveryService {
       return existing;
     }
 
-    // Calculate recovery probability
+    // Calculate recovery probability deterministically
     const { probability, expectedRecoveryAmount, factors } =
       await RevenueRiskService.calculateRecoveryProbability(merchantId, paymentId);
 
@@ -97,7 +109,7 @@ export class RecoveryService {
       },
     });
 
-    // Dispatch Inngest event for async processing
+    // Dispatch Inngest event for async durable processing
     try {
       await inngest.send({
         name: "recovery/case.created",
@@ -107,32 +119,49 @@ export class RecoveryService {
         },
       });
     } catch (err) {
-      logger.warn("Failed to dispatch recovery Inngest event", {
-        recoveryCaseId: recoveryCase.id,
+      logger.warn("Failed to dispatch Inngest event for recovery case", {
+        caseId: recoveryCase.id,
       }, err);
     }
-
-    logger.info("Recovery case created", {
-      recoveryCaseId: recoveryCase.id,
-      paymentId,
-      riskAmount,
-      probability,
-    });
 
     return recoveryCase;
   }
 
   /**
-   * Get a recovery case with full details including timeline, actions, payment, and order
+   * Get a recovery case by ID with full details
    */
-  static async getRecoveryCase(merchantId: string, caseId: string) {
+  static async getRecoveryCaseById(merchantId: string, caseId: string) {
     const recoveryCase = await db.recoveryCase.findFirst({
       where: { id: caseId, merchantId },
       include: {
-        actions: { orderBy: { createdAt: "asc" } },
-        timeline: { orderBy: { createdAt: "asc" } },
-        payment: true,
-        order: true,
+        payment: {
+          select: {
+            id: true,
+            amount: true,
+            currency: true,
+            status: true,
+            paymentMethod: true,
+            razorpayPaymentId: true,
+            failureReason: true,
+            createdAt: true,
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            amount: true,
+            currency: true,
+            status: true,
+            receipt: true,
+            razorpayOrderId: true,
+          },
+        },
+        actions: {
+          orderBy: { createdAt: "desc" },
+        },
+        timeline: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -144,22 +173,40 @@ export class RecoveryService {
   }
 
   /**
-   * List recovery cases with pagination and filters
+   * Alias for getRecoveryCaseById
    */
-  static async listRecoveryCases(merchantId: string, query: ListRecoveryCasesQuery) {
-    const page = Math.max(1, query.page || 1);
-    const limit = Math.min(100, Math.max(1, query.limit || 20));
+  static async getRecoveryCase(merchantId: string, caseId: string) {
+    return this.getRecoveryCaseById(merchantId, caseId);
+  }
+
+  /**
+   * List recovery cases with filtering and pagination
+   */
+  static async listRecoveryCases(
+    merchantId: string,
+    query: ListRecoveryCasesQuery = {}
+  ) {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      failureType,
+      search,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = query;
+
     const skip = (page - 1) * limit;
 
     const where: Prisma.RecoveryCaseWhereInput = {
       merchantId,
-      ...(query.status && { status: query.status }),
-      ...(query.failureType && { failureType: query.failureType }),
-      ...(query.search && {
+      ...(status && { status }),
+      ...(failureType && { failureType }),
+      ...(search && {
         OR: [
-          { id: { contains: query.search, mode: "insensitive" } },
-          { paymentId: { contains: query.search, mode: "insensitive" } },
-          { failureReason: { contains: query.search, mode: "insensitive" } },
+          { paymentId: { contains: search, mode: "insensitive" } },
+          { orderId: { contains: search, mode: "insensitive" } },
+          { failureReason: { contains: search, mode: "insensitive" } },
         ],
       }),
     };
@@ -170,13 +217,10 @@ export class RecoveryService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: query.sortOrder === "asc" ? "asc" : "desc" },
+        orderBy: { [sortBy]: sortOrder },
         include: {
           payment: {
             select: {
-              id: true,
-              amount: true,
-              currency: true,
               status: true,
               paymentMethod: true,
               razorpayPaymentId: true,
@@ -203,29 +247,248 @@ export class RecoveryService {
   }
 
   /**
-   * Update the recommended action for a recovery case (set by AI agent)
+   * Retrieve real-time agent activity feed across timeline events
    */
-  static async setRecommendedAction(
+  static async getAgentActivity(merchantId: string, limit: number = 50): Promise<AgentActivityItem[]> {
+    const events = await db.recoveryTimeline.findMany({
+      where: {
+        recoveryCase: {
+          merchantId,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: {
+        recoveryCase: {
+          select: {
+            riskAmount: true,
+            recoveredAmount: true,
+          },
+        },
+      },
+    });
+
+    return events.map((e) => ({
+      id: e.id,
+      recoveryCaseId: e.recoveryCaseId,
+      event: e.event,
+      description: e.description,
+      actor: e.actor,
+      riskAmount: e.recoveryCase.riskAmount,
+      recoveredAmount: e.recoveryCase.recoveredAmount,
+      metadata: e.metadata,
+      createdAt: e.createdAt,
+    }));
+  }
+
+  /**
+   * Scan and create recovery cases for unhandled payment failures
+   */
+  static async detectAndCreateCases(
+    merchantId: string,
+    options: {
+      since?: Date;
+      until?: Date;
+      limit?: number;
+      minAmount?: number;
+      maxAmount?: number;
+    } = {}
+  ) {
+    const since = options.since || new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const limit = options.limit || 100;
+
+    const failedPayments = await db.payment.findMany({
+      where: {
+        merchantId,
+        status: PaymentStatus.FAILED,
+        createdAt: {
+          gte: since,
+          ...(options.until ? { lte: options.until } : {}),
+        },
+        ...(options.minAmount !== undefined || options.maxAmount !== undefined
+          ? {
+              amount: {
+                ...(options.minAmount !== undefined ? { gte: options.minAmount } : {}),
+                ...(options.maxAmount !== undefined ? { lt: options.maxAmount } : {}),
+              },
+            }
+          : {}),
+        recoveryCases: {
+          none: {
+            status: {
+              in: [
+                RecoveryCaseStatus.DETECTED,
+                RecoveryCaseStatus.ANALYZING,
+                RecoveryCaseStatus.ACTION_PENDING,
+                RecoveryCaseStatus.EXECUTING,
+                RecoveryCaseStatus.RECOVERED,
+                RecoveryCaseStatus.ESCALATED,
+              ],
+            },
+          },
+        },
+      },
+      take: limit,
+    });
+
+    let createdCount = 0;
+    for (const payment of failedPayments) {
+      try {
+        await this.createRecoveryCase({
+          merchantId,
+          paymentId: payment.id,
+          orderId: payment.orderId,
+          riskAmount: payment.amount,
+          failureType: "payment_failure",
+          failureReason: payment.failureReason || "Gateway failure",
+          paymentMethod: payment.paymentMethod || "upi",
+        });
+        createdCount++;
+      } catch (err) {
+        logger.warn("Failed to create recovery case during detection", { paymentId: payment.id }, err);
+      }
+    }
+
+    return {
+      scanned: failedPayments.length,
+      created: createdCount,
+    };
+  }
+
+  /**
+   * Scan and retrieve high-value cases requiring merchant review (>= threshold).
+   * Ensures AI recommendations and deterministic policy checks are populated
+   * WITHOUT executing any autonomous action.
+   */
+  static async getHighValueReviewCases(merchantId: string) {
+    const policy = RecoveryPolicyService.getPolicy();
+    const threshold = policy.highValueApprovalThresholdPaise; // ₹50,000
+
+    // 1. Scan for any untracked failed payments >= threshold and create cases
+    const unhandledHighValue = await db.payment.findMany({
+      where: {
+        merchantId,
+        status: PaymentStatus.FAILED,
+        amount: { gte: threshold },
+        recoveryCases: {
+          none: {
+            status: {
+              in: [
+                RecoveryCaseStatus.DETECTED,
+                RecoveryCaseStatus.ANALYZING,
+                RecoveryCaseStatus.ACTION_PENDING,
+                RecoveryCaseStatus.EXECUTING,
+                RecoveryCaseStatus.RECOVERED,
+                RecoveryCaseStatus.ESCALATED,
+              ],
+            },
+          },
+        },
+      },
+      take: 20,
+    });
+
+    for (const payment of unhandledHighValue) {
+      try {
+        await this.createRecoveryCase({
+          merchantId,
+          paymentId: payment.id,
+          orderId: payment.orderId,
+          riskAmount: payment.amount,
+          failureType: "payment_failure",
+          failureReason: payment.failureReason || "High-value failure requiring review",
+          paymentMethod: payment.paymentMethod || "card",
+        });
+      } catch (err) {
+        logger.warn("Failed to create high-value recovery case", { paymentId: payment.id }, err);
+      }
+    }
+
+    // 2. Query all cases >= threshold that are currently awaiting review / escalated / pending
+    const cases = await db.recoveryCase.findMany({
+      where: {
+        merchantId,
+        riskAmount: { gte: threshold },
+        status: {
+          in: [
+            RecoveryCaseStatus.DETECTED,
+            RecoveryCaseStatus.ANALYZING,
+            RecoveryCaseStatus.ACTION_PENDING,
+            RecoveryCaseStatus.ESCALATED,
+          ],
+        },
+      },
+      include: {
+        payment: {
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            paymentMethod: true,
+            failureReason: true,
+            createdAt: true,
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            receipt: true,
+            amount: true,
+            notes: true,
+          },
+        },
+        actions: {
+          orderBy: { createdAt: "desc" },
+          take: 3,
+        },
+      },
+      orderBy: { riskAmount: "desc" },
+    });
+
+    return {
+      threshold,
+      thresholdRupees: threshold / 100,
+      count: cases.length,
+      cases,
+    };
+  }
+
+  /**
+   * Record untrusted AI recommendation into recovery case
+   */
+  static async recordAIRecommendation(
     caseId: string,
-    action: RecoveryActionType,
-    reasoningFactors: string[],
+    recommendation: AIRecommendation
   ) {
     const recoveryCase = await db.recoveryCase.update({
       where: { id: caseId },
       data: {
-        recommendedAction: action,
+        recommendedAction: recommendation.recommendedAction,
         status: RecoveryCaseStatus.ACTION_PENDING,
-        aiReasoningFactors: reasoningFactors,
+        aiReasoningFactors: {
+          analysis: recommendation.rawAnalysis || recommendation.analysis,
+          reasoning: recommendation.reasoning,
+          confidence: recommendation.confidence,
+          factors: recommendation.evidenceFactors,
+          provider: recommendation.provider,
+          alternativeAction: recommendation.alternativeAction,
+          generatedAt: recommendation.generatedAt,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
     await db.recoveryTimeline.create({
       data: {
         recoveryCaseId: caseId,
-        event: "ai_recommendation",
-        description: `AI recommended: ${action.replace(/_/g, " ").toLowerCase()}`,
+        event: "ai_recommended",
+        description: `AI recommended: ${recommendation.recommendedAction.replace(/_/g, " ").toLowerCase()} (Confidence: ${Math.round(recommendation.confidence * 100)}%, Provider: ${recommendation.provider})`,
         actor: "ai_agent",
-        metadata: { action, factors: reasoningFactors },
+        metadata: {
+          action: recommendation.recommendedAction,
+          confidence: recommendation.confidence,
+          factors: recommendation.evidenceFactors,
+          provider: recommendation.provider,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -233,82 +496,163 @@ export class RecoveryService {
   }
 
   /**
-   * Execute a recovery action after policy validation
+   * Execute a recovery action strictly through the deterministic Policy Engine
    */
   static async executeRecoveryAction(
     merchantId: string,
     caseId: string,
     actionType: RecoveryActionType,
-  ) {
-    const recoveryCase = await db.recoveryCase.findFirst({
-      where: { id: caseId, merchantId },
-      include: { payment: true, order: true },
-    });
-
-    if (!recoveryCase) {
-      throw new NotFoundError(`Recovery case ${caseId} not found`);
-    }
-
-    // Validate policy
-    const policyResult = await RecoveryPolicyService.validateAction(
-      recoveryCase,
-      actionType,
+    isMerchantApproved: boolean = false
+  ): Promise<{
+    allowed: boolean;
+    policyDecision: PolicyDecision;
+    command?: RecoveryCommand;
+    requiresApproval?: boolean;
+  }> {
+    // 1. Independently evaluate fresh database truth through Policy Engine
+    const policyDecision = await RecoveryPolicyService.evaluateCase(
+      merchantId,
+      caseId,
+      { recommendedAction: actionType }
     );
 
-    // Record policy check in timeline
+    // Record policy check into timeline
     await db.recoveryTimeline.create({
       data: {
         recoveryCaseId: caseId,
-        event: "policy_validated",
-        description: policyResult.allowed
-          ? "All policy checks passed"
-          : `Policy blocked: ${policyResult.reasons.join(", ")}`,
+        event: "policy_evaluated",
+        description: policyDecision.allowed
+          ? `Policy Engine approved action: ${actionType}`
+          : `Policy Engine rejected action: ${policyDecision.reasons.join(", ")}`,
         actor: "policy_engine",
-        metadata: policyResult as unknown as Prisma.InputJsonValue,
+        metadata: {
+          allowed: policyDecision.allowed,
+          action: actionType,
+          reasons: policyDecision.reasons,
+          checks: policyDecision.checks,
+          blockingRule: policyDecision.blockingRule,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
-    // Store policy results on case
+    // Store policy evaluation result on case
     await db.recoveryCase.update({
       where: { id: caseId },
-      data: { policyCheckResults: policyResult as unknown as Prisma.InputJsonValue },
+      data: {
+        policyCheckResults: {
+          allowed: policyDecision.allowed,
+          checks: policyDecision.checks,
+          reasons: policyDecision.reasons,
+          evaluatedAt: policyDecision.evaluatedAt,
+        } as unknown as Prisma.InputJsonValue,
+      },
     });
 
-    if (!policyResult.allowed) {
-      // If blocked, stop the case
+    // If blocked, terminate/stop case
+    if (!policyDecision.allowed) {
       await this.stopCase(merchantId, caseId, "POLICY_BLOCKED");
-      return { allowed: false, policyResult };
+      return { allowed: false, policyDecision };
+    }
+
+    // If high value requires merchant review and has not yet been explicitly approved by merchant
+    if (policyDecision.requiresMerchantApproval && !isMerchantApproved) {
+      await db.recoveryCase.update({
+        where: { id: caseId },
+        data: {
+          status: RecoveryCaseStatus.ESCALATED,
+          escalationReason: "High-value transaction requires merchant approval",
+        },
+      });
+
+      await db.recoveryTimeline.create({
+        data: {
+          recoveryCaseId: caseId,
+          event: "escalated_for_approval",
+          description: `Transaction value ₹${(policyDecision.trustedSnapshot.actualAmountPaise / 100).toLocaleString("en-IN")} requires manual merchant confirmation`,
+          actor: "policy_engine",
+        },
+      });
+
+      return { allowed: false, requiresApproval: true, policyDecision };
+    }
+
+    // 2. Policy approved — construct strictly bounded RecoveryCommand
+    const command: RecoveryCommand = {
+      commandId: `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      recoveryCaseId: caseId,
+      merchantId,
+      validatedAction: actionType,
+      attemptNumber: policyDecision.trustedSnapshot.actualAttemptCount + 1,
+      authorizedAmountPaise: policyDecision.trustedSnapshot.actualAmountPaise,
+      currency: policyDecision.trustedSnapshot.currency,
+      policyDecision,
+      dispatchedAt: new Date(),
+    };
+
+    // 3. Atomic state transition check — prevents concurrent execution races
+    const atomicTransition = await db.recoveryCase.updateMany({
+      where: {
+        id: caseId,
+        merchantId,
+        status: {
+          in: [
+            RecoveryCaseStatus.DETECTED,
+            RecoveryCaseStatus.ANALYZING,
+            RecoveryCaseStatus.ACTION_PENDING,
+            RecoveryCaseStatus.ESCALATED,
+          ],
+        },
+      },
+      data: {
+        selectedAction: actionType,
+        status: RecoveryCaseStatus.EXECUTING,
+        attemptCount: command.attemptNumber,
+      },
+    });
+
+    if (atomicTransition.count === 0) {
+      return {
+        allowed: false,
+        policyDecision: {
+          ...policyDecision,
+          allowed: false,
+          reasons: ["Concurrent recovery execution race detected — case is already in progress"],
+          blockingRule: "no_concurrent_execution",
+        },
+      };
     }
 
     // Create action record
-    const action = await db.recoveryAction.create({
+    const actionRecord = await db.recoveryAction.create({
       data: {
         recoveryCaseId: caseId,
         merchantId,
         actionType,
-        attemptNumber: recoveryCase.attemptCount + 1,
+        attemptNumber: command.attemptNumber,
         status: "EXECUTING",
         executedAt: new Date(),
-      },
-    });
-
-    // Update case
-    await db.recoveryCase.update({
-      where: { id: caseId },
-      data: {
-        selectedAction: actionType,
-        status: RecoveryCaseStatus.EXECUTING,
-        attemptCount: recoveryCase.attemptCount + 1,
+        input: {
+          commandId: command.commandId,
+          authorizedAmount: command.authorizedAmountPaise,
+          isMerchantApproved,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
     await db.recoveryTimeline.create({
       data: {
         recoveryCaseId: caseId,
-        event: "action_executed",
-        description: `Recovery action executed: ${actionType.replace(/_/g, " ").toLowerCase()} (attempt ${recoveryCase.attemptCount + 1})`,
-        actor: "system",
-        metadata: { actionType, attemptNumber: recoveryCase.attemptCount + 1 },
+        event: "recovery_executed",
+        description: isMerchantApproved
+          ? `Merchant-approved recovery action dispatched: ${actionType.replace(/_/g, " ").toLowerCase()} (attempt ${command.attemptNumber})`
+          : `Recovery action dispatched: ${actionType.replace(/_/g, " ").toLowerCase()} (attempt ${command.attemptNumber})`,
+        actor: isMerchantApproved ? "merchant" : "system",
+        metadata: {
+          actionType,
+          attemptNumber: command.attemptNumber,
+          commandId: command.commandId,
+          isMerchantApproved,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -318,8 +662,9 @@ export class RecoveryService {
         name: "recovery/action.executed",
         data: {
           recoveryCaseId: caseId,
-          actionId: action.id,
+          actionId: actionRecord.id,
           merchantId,
+          commandId: command.commandId,
         },
       });
     } catch (err) {
@@ -333,21 +678,152 @@ export class RecoveryService {
       entityType: "recovery_case",
       entityId: caseId,
       action: "recovery_action_executed",
-      changes: { actionType, attemptNumber: recoveryCase.attemptCount + 1, actionId: action.id },
+      changes: {
+        actionType,
+        attemptNumber: command.attemptNumber,
+        actionId: actionRecord.id,
+      },
     });
 
-    return { allowed: true, action, policyResult };
+    return { allowed: true, policyDecision, command };
   }
 
   /**
-   * Mark a recovery case as successfully recovered
+   * Authoritatively record confirmed recovery outcome from webhook / verified gateway
    */
-  static async markRecovered(caseId: string, recoveredAmount: number) {
+  static async recordRecoveryOutcome(
+    merchantId: string,
+    result: RecoveryResult
+  ) {
+    const recoveryCase = await db.recoveryCase.findFirst({
+      where: { id: result.recoveryCaseId, merchantId },
+    });
+
+    if (!recoveryCase) {
+      throw new NotFoundError(`Recovery case ${result.recoveryCaseId} not found`);
+    }
+
+    if (result.status === "SUCCESS") {
+      // 1. Double-entry ledger credit (immutable accounting invariance)
+      if (result.recoveredAmountPaise > 0) {
+        await LedgerService.recordPaymentTransaction({
+          merchantId,
+          paymentId: recoveryCase.paymentId,
+          orderId: recoveryCase.orderId,
+          amount: result.recoveredAmountPaise,
+          referenceId: result.razorpayPaymentId || `rec_${result.recoveryCaseId}`,
+          currency: "INR",
+          description: `Recovered revenue for case #${result.recoveryCaseId.slice(-8).toUpperCase()}`,
+        });
+      }
+
+      // 2. Update recovery action
+      await db.recoveryAction.update({
+        where: { id: result.actionId },
+        data: {
+          status: "SUCCESS",
+          completedAt: result.completedAt,
+          output: {
+            recoveredAmount: result.recoveredAmountPaise,
+            razorpayPaymentId: result.razorpayPaymentId,
+            verifiedVia: result.verifiedVia,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      // 3. Mark case as recovered
+      await db.recoveryCase.update({
+        where: { id: result.recoveryCaseId },
+        data: {
+          status: RecoveryCaseStatus.RECOVERED,
+          recoveredAmount: result.recoveredAmountPaise,
+          resolvedAt: result.completedAt,
+        },
+      });
+
+      await db.recoveryTimeline.create({
+        data: {
+          recoveryCaseId: result.recoveryCaseId,
+          event: "recovery_succeeded",
+          description: `₹${(result.recoveredAmountPaise / 100).toLocaleString("en-IN")} authoritatively recovered and credited to ledger (verified via ${result.verifiedVia})`,
+          actor: "system",
+          metadata: {
+            recoveredAmount: result.recoveredAmountPaise,
+            razorpayPaymentId: result.razorpayPaymentId,
+            verifiedVia: result.verifiedVia,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      await AuditService.createAuditLog({
+        merchantId,
+        entityType: "recovery_case",
+        entityId: result.recoveryCaseId,
+        action: "recovery_succeeded",
+        changes: {
+          recoveredAmount: result.recoveredAmountPaise,
+          verifiedVia: result.verifiedVia,
+        },
+      });
+    } else {
+      // Action failed
+      await db.recoveryAction.update({
+        where: { id: result.actionId },
+        data: {
+          status: "FAILED",
+          completedAt: result.completedAt,
+          output: { error: result.error || "Recovery retry declined" } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      const maxReached = recoveryCase.attemptCount >= recoveryCase.maxAttempts;
+      const nextStatus = maxReached ? RecoveryCaseStatus.STOPPED : RecoveryCaseStatus.FAILED;
+
+      await db.recoveryCase.update({
+        where: { id: result.recoveryCaseId },
+        data: {
+          status: nextStatus,
+          stopReason: maxReached ? RecoveryStopReason.MAX_ATTEMPTS_REACHED : null,
+          resolvedAt: maxReached ? result.completedAt : null,
+        },
+      });
+
+      await db.recoveryTimeline.create({
+        data: {
+          recoveryCaseId: result.recoveryCaseId,
+          event: "recovery_failed",
+          description: `Recovery attempt ${recoveryCase.attemptCount} failed: ${result.error || "Declined by gateway"}`,
+          actor: "system",
+        },
+      });
+    }
+  }
+
+  /**
+   * Stop a recovery case with reason
+   */
+  static async stopCase(
+    merchantId: string,
+    caseId: string,
+    stopReason: string
+  ) {
+    const existing = await db.recoveryCase.findFirst({
+      where: { id: caseId, merchantId },
+    });
+
+    if (!existing) {
+      throw new NotFoundError(`Recovery case ${caseId} not found for merchant`);
+    }
+
+    const reasonEnum = Object.values(RecoveryStopReason).includes(stopReason as RecoveryStopReason)
+      ? (stopReason as RecoveryStopReason)
+      : RecoveryStopReason.POLICY_BLOCKED;
+
     const recoveryCase = await db.recoveryCase.update({
-      where: { id: caseId },
+      where: { id: existing.id },
       data: {
-        status: RecoveryCaseStatus.RECOVERED,
-        recoveredAmount,
+        status: RecoveryCaseStatus.STOPPED,
+        stopReason: reasonEnum,
         resolvedAt: new Date(),
       },
     });
@@ -355,50 +831,52 @@ export class RecoveryService {
     await db.recoveryTimeline.create({
       data: {
         recoveryCaseId: caseId,
-        event: "recovery_completed",
-        description: `₹${(recoveredAmount / 100).toLocaleString("en-IN")} successfully recovered`,
-        actor: "system",
-        metadata: { recoveredAmount },
+        event: "recovery_stopped",
+        description: `Recovery stopped: ${stopReason.replace(/_/g, " ").toLowerCase()}`,
+        actor: "policy_engine",
       },
     });
 
     await AuditService.createAuditLog({
-      merchantId: recoveryCase.merchantId,
+      merchantId,
       entityType: "recovery_case",
       entityId: caseId,
-      action: "recovery_completed",
-      changes: { recoveredAmount, status: "RECOVERED" },
+      action: "recovery_case_stopped",
+      changes: { stopReason },
     });
 
     return recoveryCase;
   }
 
   /**
-   * Escalate a recovery case to merchant
+   * Escalate a recovery case to the merchant
    */
-  static async escalateCase(merchantId: string, caseId: string, reason?: string) {
-    const recoveryCase = await db.recoveryCase.findFirst({
+  static async escalateCase(
+    merchantId: string,
+    caseId: string,
+    reason: string
+  ) {
+    const existing = await db.recoveryCase.findFirst({
       where: { id: caseId, merchantId },
     });
 
-    if (!recoveryCase) {
-      throw new NotFoundError(`Recovery case ${caseId} not found`);
+    if (!existing) {
+      throw new NotFoundError(`Recovery case ${caseId} not found for merchant`);
     }
 
-    const updated = await db.recoveryCase.update({
-      where: { id: caseId },
+    const recoveryCase = await db.recoveryCase.update({
+      where: { id: existing.id },
       data: {
         status: RecoveryCaseStatus.ESCALATED,
-        escalationReason: reason || "Automated recovery not possible",
-        resolvedAt: new Date(),
+        escalationReason: reason,
       },
     });
 
     await db.recoveryTimeline.create({
       data: {
         recoveryCaseId: caseId,
-        event: "case_escalated",
-        description: `Escalated to merchant: ${reason || "Automated recovery not possible"}`,
+        event: "recovery_escalated",
+        description: `Case escalated: ${reason}`,
         actor: "system",
         metadata: { reason },
       },
@@ -408,148 +886,10 @@ export class RecoveryService {
       merchantId,
       entityType: "recovery_case",
       entityId: caseId,
-      action: "recovery_escalated",
-      changes: { reason, status: "ESCALATED" },
+      action: "recovery_case_escalated",
+      changes: { escalationReason: reason },
     });
 
-    return updated;
-  }
-
-  /**
-   * Stop a recovery case
-   */
-  static async stopCase(merchantId: string, caseId: string, stopReason: string) {
-    const validStopReason = Object.values(RecoveryStopReason).includes(stopReason as RecoveryStopReason)
-      ? (stopReason as RecoveryStopReason)
-      : RecoveryStopReason.POLICY_BLOCKED;
-
-    const updated = await db.recoveryCase.update({
-      where: { id: caseId },
-      data: {
-        status: RecoveryCaseStatus.STOPPED,
-        stopReason: validStopReason,
-        resolvedAt: new Date(),
-      },
-    });
-
-    await db.recoveryTimeline.create({
-      data: {
-        recoveryCaseId: caseId,
-        event: "case_stopped",
-        description: `Recovery stopped: ${stopReason.replace(/_/g, " ").toLowerCase()}`,
-        actor: "system",
-        metadata: { stopReason },
-      },
-    });
-
-    await AuditService.createAuditLog({
-      merchantId,
-      entityType: "recovery_case",
-      entityId: caseId,
-      action: "recovery_stopped",
-      changes: { stopReason, status: "STOPPED" },
-    });
-
-    return updated;
-  }
-
-  /**
-   * Get agent activity feed (recent timeline events across all cases)
-   */
-  static async getAgentActivity(merchantId: string, limit = 50) {
-    const timeline = await db.recoveryTimeline.findMany({
-      where: {
-        recoveryCase: { merchantId },
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      include: {
-        recoveryCase: {
-          select: {
-            id: true,
-            riskAmount: true,
-            recoveredAmount: true,
-            status: true,
-            failureType: true,
-            paymentMethod: true,
-          },
-        },
-      },
-    });
-
-    return timeline.map((t) => ({
-      id: t.id,
-      recoveryCaseId: t.recoveryCaseId,
-      event: t.event,
-      description: t.description,
-      actor: t.actor,
-      riskAmount: t.recoveryCase.riskAmount,
-      recoveredAmount: t.recoveryCase.recoveredAmount,
-      status: t.recoveryCase.status,
-      metadata: t.metadata,
-      createdAt: t.createdAt,
-    }));
-  }
-
-  /**
-   * Auto-detect failed payments and create recovery cases for them.
-   * Called by the batch recovery flow or Inngest cron.
-   */
-  static async detectAndCreateCases(merchantId: string, options?: {
-    since?: Date;
-    limit?: number;
-  }): Promise<{ created: number; skipped: number; errors: number }> {
-    const since = options?.since || new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const limit = options?.limit || 100;
-
-    const failedPayments = await db.payment.findMany({
-      where: {
-        merchantId,
-        status: PaymentStatus.FAILED,
-        createdAt: { gte: since },
-      },
-      include: { order: true },
-      take: limit,
-      orderBy: { createdAt: "desc" },
-    });
-
-    let created = 0;
-    let skipped = 0;
-    let errors = 0;
-
-    for (const payment of failedPayments) {
-      try {
-        // Check if case already exists
-        const existing = await db.recoveryCase.findFirst({
-          where: {
-            paymentId: payment.id,
-            status: { notIn: ["FAILED", "EXPIRED", "STOPPED"] },
-          },
-        });
-
-        if (existing) {
-          skipped++;
-          continue;
-        }
-
-        await this.createRecoveryCase({
-          merchantId,
-          paymentId: payment.id,
-          orderId: payment.orderId,
-          riskAmount: payment.amount,
-          failureType: "payment_failure",
-          failureReason: payment.failureReason || undefined,
-          paymentMethod: payment.paymentMethod || undefined,
-        });
-        created++;
-      } catch (err) {
-        errors++;
-        logger.warn("Failed to create recovery case for payment", {
-          paymentId: payment.id,
-        }, err);
-      }
-    }
-
-    return { created, skipped, errors };
+    return recoveryCase;
   }
 }

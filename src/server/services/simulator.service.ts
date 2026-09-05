@@ -6,7 +6,7 @@ export type SimulationScenarioType =
   | "BANK_DECLINE"
   | "WEBHOOK_HMAC_TAMPER"
   | "WEBHOOK_DEDUPLICATION_REPLAY"
-  | "CONCURRENT_REFUND_RACE";
+  | "CONCURRENT_RECOVERY_RACE";
 
 export interface SimulationStep {
   step: number;
@@ -198,21 +198,21 @@ export class SimulatorService {
         };
       }
 
-      case "CONCURRENT_REFUND_RACE": {
-        addStep("Original Payment Captured", "SUCCESS", "Captured Payment: ₹1,000.00 (Refundable Balance: ₹1,000.00).");
-        addStep("Concurrent Refund Request A", "SUCCESS", "Worker A requested ₹600.00 refund (Acquired Redis lock).");
-        addStep("Concurrent Refund Request B", "BLOCKED_SAFELY", "Worker B requested ₹600.00 refund simultaneously.");
-        addStep("Worker A Execution", "SUCCESS", "Worker A successfully processed ₹600.00 refund (Remaining balance: ₹400.00).");
-        addStep("Worker B Verification", "BLOCKED_SAFELY", "Worker B evaluated live ledger balance (₹400.00) and safely threw BadRequestError (Insufficient refundable balance).");
+      case "CONCURRENT_RECOVERY_RACE": {
+        addStep("Trigger Recovery Flow", "SUCCESS", "AI Agent dispatched SMS payment recovery link for Case #RC-9102 (₹2,499.00).");
+        addStep("Concurrent Recovery Attempt A", "SUCCESS", "Customer opened SMS recovery link and initiated Razorpay checkout (Acquired Redis lock).");
+        addStep("Concurrent Recovery Attempt B", "BLOCKED_SAFELY", "Scheduled background durable retry worker fired simultaneously for Case #RC-9102.");
+        addStep("Execution & Capture Guard", "SUCCESS", "Customer checkout captured ₹2,499.00; Case marked RECOVERED in ledger.");
+        addStep("Background Retry Intercept", "BLOCKED_SAFELY", "Background worker detected active lock / idempotency state; safely aborted without double-charging.");
 
         return {
           scenario,
-          title: "Concurrent Refund Race Condition & Double-Debit Prevention",
-          description: "Simulates two simultaneous refund requests on the same payment and verifies Redis distributed locking and balance guards.",
-          executionTimeMs: Date.now() - startTime + 92,
-          defenseMechanism: "Redis Distributed Locking & Live Ledger Balance Validation",
+          title: "Concurrent Recovery Race & Double-Charge Prevention",
+          description: "Simulates a customer paying via recovery SMS link at the exact moment a background auto-retry runs, verifying Redis locking prevents duplicate charges.",
+          executionTimeMs: Date.now() - startTime + 76,
+          defenseMechanism: "Redis Distributed Locking & Multi-Tiered Idempotency",
           outcome: "PASSED_RESILIENT",
-          summary: "System prevented over-refunding ₹1,200 on a ₹1,000 payment; second refund rejected safely with balance intact.",
+          summary: "System prevented double-capture of ₹2,499; customer recovery succeeded and concurrent background retry was safely blocked.",
           steps,
           ledgerProtected: true,
         };

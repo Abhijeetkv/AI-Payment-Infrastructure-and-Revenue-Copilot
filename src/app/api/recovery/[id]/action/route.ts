@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MerchantService } from "@/server/services/merchant.service";
 import { RecoveryService } from "@/server/services/recovery.service";
-import { RecoveryActionType } from "@prisma/client";
+import { RecoveryActionRequestSchema } from "@/lib/recovery/validation";
 import { logger } from "@/lib/logger";
 
 export async function POST(
@@ -11,24 +11,27 @@ export async function POST(
   try {
     const { id } = await context.params;
     const merchant = await MerchantService.getOrCreateDefaultMerchant();
-    const body = await request.json();
+    const rawBody = await request.json().catch(() => ({}));
 
-    const actionType = body.actionType as RecoveryActionType;
-
-    if (!actionType || !Object.values(RecoveryActionType).includes(actionType)) {
+    const parsed = RecoveryActionRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
       return NextResponse.json(
         {
           success: false,
-          error: `Valid actionType required (${Object.values(RecoveryActionType).join(", ")})`,
+          error: "Invalid request payload",
+          details: parsed.error.issues,
         },
         { status: 400 }
       );
     }
 
+    const { actionType, isMerchantApproved } = parsed.data;
+
     const result = await RecoveryService.executeRecoveryAction(
       merchant.id,
       id,
-      actionType
+      actionType,
+      isMerchantApproved
     );
 
     return NextResponse.json({

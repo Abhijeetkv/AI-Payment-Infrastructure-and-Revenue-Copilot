@@ -230,13 +230,12 @@ export default function RecoveryCasesPage() {
                         <div className="flex items-center gap-2">
                           <div className="w-12 bg-[#e1e2e5] rounded-full h-1.5 overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${
-                                probPct > 70
+                              className={`h-full rounded-full ${probPct > 70
                                   ? "bg-[#2e7d32]"
                                   : probPct > 40
                                     ? "bg-[#f57f17]"
                                     : "bg-[#ba1a1a]"
-                              }`}
+                                }`}
                               style={{ width: `${probPct}%` }}
                             />
                           </div>
@@ -255,8 +254,7 @@ export default function RecoveryCasesPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            isRecovered
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${isRecovered
                               ? "bg-[#e8f5e9] text-[#2e7d32]"
                               : isExecuting
                                 ? "bg-[#e0e0ff] text-[#2a21d2]"
@@ -265,7 +263,7 @@ export default function RecoveryCasesPage() {
                                   : c.status === "ESCALATED"
                                     ? "bg-[#f3e5f5] text-[#7b1fa2]"
                                     : "bg-[#fff8e1] text-[#f57f17]"
-                          }`}
+                            }`}
                         >
                           {c.status}
                         </span>
