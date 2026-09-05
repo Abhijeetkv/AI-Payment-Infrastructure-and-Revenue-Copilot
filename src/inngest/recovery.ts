@@ -515,22 +515,51 @@ export const processBatchRecovery = inngest.createFunction(
   {
     id: "process-batch-recovery",
     retries: 1,
-    triggers: [{ event: "recovery/batch.requested" }],
+    triggers: [
+      { event: "recovery/batch.started" },
+      { event: "recovery/batch.requested" },
+    ],
   },
   async ({
     event,
     step,
   }: {
-    event: { data: { merchantId: string; caseIds: string[]; actionType?: RecoveryActionType } };
+    event: {
+      data: {
+        merchantId: string;
+        batchId?: string;
+        campaignType?: string;
+        caseIds?: string[];
+        actionType?: RecoveryActionType;
+      };
+    };
     step: StepTools;
   }) => {
-    const { merchantId, caseIds, actionType } = event.data;
+    const { merchantId, batchId, campaignType, actionType } = event.data;
+
+    const targetCaseIds = await step.run("resolve-target-cases", async () => {
+      if (event.data.caseIds && event.data.caseIds.length > 0) {
+        return event.data.caseIds;
+      }
+
+      // Query open recovery cases for the merchant
+      const cases = await db.recoveryCase.findMany({
+        where: {
+          merchantId,
+          status: { in: [RecoveryCaseStatus.OPEN, RecoveryCaseStatus.IN_PROGRESS] },
+        },
+        select: { id: true },
+        take: 50,
+      });
+
+      return cases.map((c) => c.id);
+    });
 
     return step.run("execute-batch-actions", async () => {
       let executed = 0;
       let blocked = 0;
 
-      for (const caseId of caseIds) {
+      for (const caseId of targetCaseIds) {
         try {
           const action = actionType || RecoveryActionType.PAYMENT_RETRY;
           const result = await RecoveryService.executeRecoveryAction(merchantId, caseId, action);
@@ -544,7 +573,13 @@ export const processBatchRecovery = inngest.createFunction(
         }
       }
 
-      return { executed, blocked, total: caseIds.length };
+      return {
+        batchId,
+        campaignType,
+        total: targetCaseIds.length,
+        executed,
+        blocked,
+      };
     });
   }
 );

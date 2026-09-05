@@ -88,4 +88,5 @@ export type Events = {
 export const inngest = new Inngest({
   id: "lumina-recovery-agent",
   eventKey: process.env.INNGEST_EVENT_KEY || "local",
+  isDev: process.env.NODE_ENV === "development",
 });
